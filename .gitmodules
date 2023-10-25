@@ -1,0 +1,9 @@
+[submodule "ThirdParty/Empty"]
+	path = ThirdParty/Empty
+	url = https://github.com/matrefeytontias/Empty
+[submodule "ThirdParty/GLFW"]
+	path = ThirdParty/GLFW
+	url = https://github.com/glfw/glfw
+[submodule "ThirdParty/imgui/imgui"]
+	path = ThirdParty/imgui/imgui
+	url = https://github.com/ocornut/imgui
