@@ -4,7 +4,7 @@ layout(local_size_x = 32) in;
 
 uniform float uBoundaryCondition;
 
-layout(binding = 5, r32f) uniform restrict image2D uField;
+layout(binding = 3, rg32f) uniform restrict image2D uField;
 
 void main()
 {
@@ -23,7 +23,7 @@ void main()
 		return;
 	ivec2 offset = id.y < 2 ? ivec2(0, -id.y * 2 + 1) : ivec2(-id.y * 2 + 5, 0);
 
-	float boundaryValue = imageLoad(uField, texel + offset).r;
+	vec4 boundaryValue = imageLoad(uField, texel + offset);
 
-	imageStore(uField, texel, vec4(uBoundaryCondition * boundaryValue));
+	imageStore(uField, texel, uBoundaryCondition * boundaryValue);
 }

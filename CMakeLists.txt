@@ -20,7 +20,21 @@ set_property(DIRECTORY PROPERTY VS_STARTUP_PROJECT FluidSimTest)
 
 # Resources
 
-set(RESOURCES shaders/advection.glsl shaders/boundary.glsl shaders/divergence.glsl shaders/forces.glsl shaders/jacobi.glsl shaders/projection.glsl shaders/debug/vertex.glsl shaders/debug/fragment.glsl)
+set(RESOURCES
+    # Fluid sim shaders
+    shaders/advection_scalar.glsl
+    shaders/advection_vector.glsl
+    shaders/boundary_scalar.glsl
+    shaders/boundary_vector.glsl
+    shaders/divergence.glsl
+    shaders/forces.glsl
+    shaders/jacobi.glsl
+    shaders/projection.glsl
+    shaders/velocity_pack.glsl
+    shaders/velocity_unpack.glsl
+    # Debug shaders
+    shaders/debug/vertex.glsl
+    shaders/debug/fragment.glsl)
 target_sources(FluidSimTest PRIVATE ${RESOURCES})
 
 foreach(RES ${RESOURCES})

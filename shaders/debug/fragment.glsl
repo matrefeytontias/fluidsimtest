@@ -8,6 +8,6 @@ out vec4 fFragColor;
 
 void main()
 {
-	float color = texture(uTexture, vUV).r * uColorScale;
-	fFragColor = vec4(max(0, color), 0, max(0, -color), 1);
+	vec4 color = texture(uTexture, vUV) * uColorScale;
+	fFragColor = max(color, 0.) + max(-color.bgra, 0.);
 }
