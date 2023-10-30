@@ -9,5 +9,5 @@ out vec4 fFragColor;
 void main()
 {
 	vec4 color = texture(uTexture, vUV) * uColorScale;
-	fFragColor = max(color, 0.) + max(-color.bgra, 0.);
+	fFragColor = abs(color);
 }

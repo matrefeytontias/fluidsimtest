@@ -111,16 +111,18 @@ struct FluidState
 // ********************************************
 
 constexpr int allVelocityBinding = 0;
-constexpr int allFieldInBinding = 1;
-constexpr int allFieldOutBinding = 2;
+constexpr int allInkDensityBinding = 1;
+
+constexpr int advectionVelocityOutBinding = 2;
+constexpr int advectionInkDensityOutBinding = 3;
 
 constexpr int jacobiSourceBinding = 0;
+constexpr int jacobiFieldInBinding = 1;
+constexpr int jacobiFieldOutBinding = 2;
 
-constexpr int forcesInkBinding = 1;
+constexpr int divergenceOutBinding = 1;
 
 constexpr int projectionPressureBinding = 1;
-
-constexpr int boundaryFieldBinding = 3;
 
 constexpr int velocityPackingXBinding = 1;
 constexpr int velocityPackingYBinding = 2;
@@ -136,59 +138,48 @@ constexpr float zeroBoundaryCondition = 0.f;
 // Functions for advancing the fluid simulation
 // ********************************************
 
-template <typename Field>
-void performBoundaryConditions(ShaderProgram& boundaryProgram, Field& field, const Empty::math::uvec2& gridSize, float boundaryCondition)
-{
-	constexpr int boundaryWorkGroupX = 32;
-
-	Context& context = Context::get();
-
-	boundaryProgram.uniform("uBoundaryCondition", boundaryCondition);
-	boundaryProgram.registerTexture("uField", field, false);
-	context.bind(field.getLevel(0), boundaryFieldBinding, AccessPolicy::ReadWrite, Field::Format);
-
-	context.setShaderProgram(boundaryProgram);
-	context.dispatchCompute(gridSize.x / boundaryWorkGroupX, 4, 1);
-}
-
-void setupAdvection(ShaderProgram& advectionProgram, FluidState& fluidState, float dt)
-{
-	Context& context = Context::get();
-
-	auto& velocityTex = fluidState.velocity.getInput();
-
-	advectionProgram.uniform("udt", dt);
-	advectionProgram.uniform("udx", fluidState.parameters.gridCellSize);
-	advectionProgram.registerTexture("uVelocity", velocityTex, false);
-	context.bind(velocityTex.getLevel(0), allVelocityBinding, AccessPolicy::ReadOnly, GPUVectorField::Format);
-
-	context.setShaderProgram(advectionProgram);
-}
-
-template <typename BufferedField>
-void advectField(ShaderProgram& advectionProgram, BufferedField& field, Empty::math::uvec2 gridSize)
+void performAdvection(ShaderProgram& advectionProgram, FluidState& fluidState, BufferedScalarField& inkDensity, float dt, Empty::math::uvec2 gridSize)
 {
 	constexpr int advectionWorkGroupX = 32;
 	constexpr int advectionWorkGroupY = 32;
 
 	Context& context = Context::get();
 
-	auto& fieldIn = field.getInput();
-	auto& fieldOut = field.getOutput();
+	auto& params = fluidState.parameters;
 
-	// Input field is exposed as a texture to benefit from bilinear filtering
-	advectionProgram.registerTexture("uFieldIn", fieldIn, false);
-	advectionProgram.registerTexture("uFieldOut", fieldOut, false);
+	advectionProgram.uniform("udx", params.gridCellSize);
+	advectionProgram.uniform("udt", dt);
+	{
+		Empty::math::vec2 data(1.f / (params.gridSize.x * params.gridCellSize), 1.f / (params.gridSize.y * params.gridCellSize));
+		advectionProgram.uniform("uOneOverGridSizeTimesDx", data);
+	}
 
-	context.bind(fieldIn, allFieldInBinding);
-	context.bind(fieldOut.getLevel(0), allFieldOutBinding, AccessPolicy::WriteOnly, BufferedField::Field::Format);
+	// Inputs are exposed with samplers to benefit from bilinear filtering
 
+	auto& velocityTex = fluidState.velocity.getInput();
+	advectionProgram.registerTexture("uVelocity", velocityTex, false);
+	context.bind(velocityTex, allVelocityBinding);
+
+	auto& inkTex = inkDensity.getInput();
+	advectionProgram.registerTexture("uInkDensity", inkTex, false);
+	context.bind(inkTex, allInkDensityBinding);
+
+	auto& velocityOut = fluidState.velocity.getOutput();
+	advectionProgram.registerTexture("uVelocityOut", velocityOut, false);
+	context.bind(velocityOut.getLevel(0), advectionVelocityOutBinding, AccessPolicy::WriteOnly, GPUVectorField::Format);
+
+	auto& inkOut = inkDensity.getOutput();
+	advectionProgram.registerTexture("uInkDensityOut", inkOut, false);
+	context.bind(inkOut.getLevel(0), advectionInkDensityOutBinding, AccessPolicy::WriteOnly, GPUScalarField::Format);
+
+	context.setShaderProgram(advectionProgram);
 	context.dispatchCompute(gridSize.x / advectionWorkGroupX, gridSize.y / advectionWorkGroupY, 1);
 
-	field.swap();
+	fluidState.velocity.swap();
+	inkDensity.swap();
 }
 
-void performJacobiIterations(ShaderProgram& jacobiProgram, ShaderProgram& boundaryProgram, GPUScalarField& fieldSource, GPUScalarField& fieldIn, GPUScalarField& fieldOut, Empty::math::uvec2 gridSize, int jacobiSteps, float boundaryCondition)
+void performJacobiIterations(ShaderProgram& jacobiProgram, GPUScalarField& fieldSource, GPUScalarField& fieldIn, GPUScalarField& fieldOut, Empty::math::uvec2 gridSize, int jacobiSteps)
 {
 	constexpr int jacobiWorkGroupX = 32;
 	constexpr int jacobiWorkGroupY = 32;
@@ -227,20 +218,17 @@ void performJacobiIterations(ShaderProgram& jacobiProgram, ShaderProgram& bounda
 	GPUScalarField* iterationFieldIn = &fieldIn;
 	GPUScalarField* iterationFieldOut = writeToWorkingField ? workingField.get() : &fieldOut;
 
+	context.setShaderProgram(jacobiProgram);
+
 	for (int iteration = 0; iteration < jacobiSteps; ++iteration)
 	{
 		jacobiProgram.registerTexture("uFieldIn", *iterationFieldIn, false);
 		jacobiProgram.registerTexture("uFieldOut", *iterationFieldOut, false);
-		context.bind(iterationFieldIn->getLevel(0), allFieldInBinding, AccessPolicy::ReadOnly, GPUScalarField::Format);
-		context.bind(iterationFieldOut->getLevel(0), allFieldOutBinding, AccessPolicy::WriteOnly, GPUScalarField::Format);
-
-		// The boundary program gets set every iteration so the jacobi one also needs to be set
-		context.setShaderProgram(jacobiProgram);
-		context.dispatchComputeIndirect();
+		context.bind(iterationFieldIn->getLevel(0), jacobiFieldInBinding, AccessPolicy::ReadOnly, GPUScalarField::Format);
+		context.bind(iterationFieldOut->getLevel(0), jacobiFieldOutBinding, AccessPolicy::WriteOnly, GPUScalarField::Format);
 
 		context.memoryBarrier(MemoryBarrierType::ShaderImageAccess);
-
-		performBoundaryConditions(boundaryProgram, *iterationFieldOut, gridSize, boundaryCondition);
+		context.dispatchComputeIndirect();
 
 		// I could simply swap iterationFieldIn and iterationFieldOut but I can't overwrite the actual fieldIn,
 		// which is used as iterationFieldIn for the first iteration.
@@ -250,7 +238,7 @@ void performJacobiIterations(ShaderProgram& jacobiProgram, ShaderProgram& bounda
 	}
 }
 
-void performDiffusion(ShaderProgram& jacobiProgram, ShaderProgram& scalarBoundaryProgram, ShaderProgram& velocityUnpackProgram, ShaderProgram& velocityPackProgram,
+void performDiffusion(ShaderProgram& jacobiProgram, ShaderProgram& velocityUnpackProgram, ShaderProgram& velocityPackProgram,
 	FluidState& fluidState, float dt, int jacobiSteps)
 {
 	constexpr int velocityPackingWorkGroupX = 32;
@@ -275,6 +263,7 @@ void performDiffusion(ShaderProgram& jacobiProgram, ShaderProgram& scalarBoundar
 		float oneOverBeta = 1.f / (alpha + 4.f);
 		jacobiProgram.uniform("uAlpha", alpha);
 		jacobiProgram.uniform("uOneOverBeta", oneOverBeta);
+		jacobiProgram.uniform("uBoundaryCondition", noSlipBoundaryCondition);
 	}
 
 	// Unpack velocity field
@@ -290,6 +279,7 @@ void performDiffusion(ShaderProgram& jacobiProgram, ShaderProgram& scalarBoundar
 		context.bind(velocityXTex.getLevel(0), velocityPackingXBinding, AccessPolicy::WriteOnly, GPUScalarField::Format);
 		context.bind(velocityYTex.getLevel(0), velocityPackingYBinding, AccessPolicy::WriteOnly, GPUScalarField::Format);
 		context.setShaderProgram(velocityUnpackProgram);
+		context.memoryBarrier(MemoryBarrierType::ShaderImageAccess);
 		context.dispatchCompute(params.gridSize.x / velocityPackingWorkGroupX, params.gridSize.y / velocityPackingWorkGroupY, 1);
 
 		velocityX->swap();
@@ -297,12 +287,12 @@ void performDiffusion(ShaderProgram& jacobiProgram, ShaderProgram& scalarBoundar
 	}
 
 	// Perform Jacobi iterations on individual components
-	for (auto* fields : { velocityX.get(), velocityY.get() /*, velocityZ.get() */})
+	for (auto fields : { velocityX.get(), velocityY.get() /*, velocityZ.get() */})
 	{
 		GPUScalarField& fieldIn = fields->getInput();
 		GPUScalarField& fieldOut = fields->getOutput();
 
-		performJacobiIterations(jacobiProgram, scalarBoundaryProgram, fieldIn, fieldIn, fieldOut, params.gridSize, jacobiSteps, noSlipBoundaryCondition);
+		performJacobiIterations(jacobiProgram, fieldIn, fieldIn, fieldOut, params.gridSize, jacobiSteps);
 
 		fields->swap();
 	}
@@ -320,6 +310,7 @@ void performDiffusion(ShaderProgram& jacobiProgram, ShaderProgram& scalarBoundar
 		context.bind(velocityXTex.getLevel(0), velocityPackingXBinding, AccessPolicy::ReadOnly, GPUScalarField::Format);
 		context.bind(velocityYTex.getLevel(0), velocityPackingYBinding, AccessPolicy::ReadOnly, GPUScalarField::Format);
 		context.setShaderProgram(velocityPackProgram);
+		context.memoryBarrier(MemoryBarrierType::ShaderImageAccess);
 		context.dispatchCompute(params.gridSize.x / velocityPackingWorkGroupX, params.gridSize.y / velocityPackingWorkGroupY, 1);
 	}
 
@@ -341,12 +332,12 @@ void performForcesApplication(ShaderProgram& forcesProgram, FluidState& fluidSta
 	forcesProgram.uniform("udt", dt);
 	forcesProgram.uniform("uMouseClick", impulse.position);
 	forcesProgram.uniform("uForceMagnitude", impulse.magnitude);
-	forcesProgram.uniform("uForceRadius", impulse.radius);
+	forcesProgram.uniform("uOneOverForceRadius", 1.f / impulse.radius);
 	forcesProgram.uniform("uInkAmount", impulse.inkAmount);
 	forcesProgram.registerTexture("uVelocity", velocityTex, false);
 	forcesProgram.registerTexture("uInkDensity", inkTex, false);
 	context.bind(velocityTex.getLevel(0), allVelocityBinding, AccessPolicy::ReadWrite, GPUVectorField::Format);
-	context.bind(inkTex.getLevel(0), forcesInkBinding, AccessPolicy::ReadWrite, GPUScalarField::Format);
+	context.bind(inkTex.getLevel(0), allInkDensityBinding, AccessPolicy::ReadWrite, GPUScalarField::Format);
 
 	context.setShaderProgram(forcesProgram);
 	context.dispatchCompute(params.gridSize.x / forcesWorkGroupX, params.gridSize.y / forcesWorkGroupY, 1);
@@ -366,16 +357,16 @@ void performDivergenceComputation(ShaderProgram& divergenceProgram, FluidState& 
 	auto& velocityTex = fluidState.velocity.getInput();
 
 	divergenceProgram.uniform("uHalfOneOverDx", 1.f / (2.f * params.gridCellSize));
-	divergenceProgram.registerTexture("uVelocityX", velocityTex, false);
+	divergenceProgram.registerTexture("uVelocity", velocityTex, false);
 	divergenceProgram.registerTexture("uFieldOut", fluidState.divergenceTex, false);
 	context.bind(velocityTex.getLevel(0), allVelocityBinding, AccessPolicy::ReadOnly, GPUVectorField::Format);
-	context.bind(fluidState.divergenceTex.getLevel(0), allFieldOutBinding, AccessPolicy::WriteOnly, GPUScalarField::Format);
+	context.bind(fluidState.divergenceTex.getLevel(0), divergenceOutBinding, AccessPolicy::WriteOnly, GPUScalarField::Format);
 
 	context.setShaderProgram(divergenceProgram);
 	context.dispatchCompute(params.gridSize.x / divergenceWorkGroupX, params.gridSize.y / divergenceWorkGroupY, 1);
 }
 
-void performPressureComputation(ShaderProgram& jacobiProgram, ShaderProgram& scalarBoundaryProgram, FluidState& fluidState, int jacobiSteps)
+void performPressureComputation(ShaderProgram& jacobiProgram, FluidState& fluidState, int jacobiSteps)
 {
 	const auto& params = fluidState.parameters;
 
@@ -385,6 +376,7 @@ void performPressureComputation(ShaderProgram& jacobiProgram, ShaderProgram& sca
 		float oneOverBeta = 1.f / 4.f;
 		jacobiProgram.uniform("uAlpha", alpha);
 		jacobiProgram.uniform("uOneOverBeta", oneOverBeta);
+		jacobiProgram.uniform("uBoundaryCondition", neumannBoundaryCondition);
 	}
 
 	GPUScalarField& fieldIn = fluidState.pressure.getInput();
@@ -392,7 +384,7 @@ void performPressureComputation(ShaderProgram& jacobiProgram, ShaderProgram& sca
 
 	fieldIn.template clearLevel<DataFormat::Red, DataType::Float>(0);
 
-	performJacobiIterations(jacobiProgram, scalarBoundaryProgram, fluidState.divergenceTex, fieldIn, fieldOut, params.gridSize, jacobiSteps, neumannBoundaryCondition);
+	performJacobiIterations(jacobiProgram, fluidState.divergenceTex, fieldIn, fieldOut, params.gridSize, jacobiSteps);
 
 	fluidState.pressure.swap();
 }
@@ -479,13 +471,14 @@ int main(int argc, char* argv[])
 	BufferedScalarField inkDensity("Ink density", fluidState.parameters.gridSize);
 
 	// Programs and shaders
-	ShaderProgram scalarAdvectionProgram("Scalar advection program");
-	scalarAdvectionProgram.attachFile(ShaderType::Compute, "shaders/advection_scalar.glsl", "Scalar advection shader");
-	scalarAdvectionProgram.build();
+	Shader entryPointShader(ShaderType::Compute, "Entry point shader");
+	if (!entryPointShader.setSourceFromFile("shaders/entry_point.glsl"))
+		FATAL("Failed to compile scalar entry point shader:\n" << entryPointShader.getLog());
 
-	ShaderProgram vectorAdvectionProgram("Vector advection program");
-	vectorAdvectionProgram.attachFile(ShaderType::Compute, "shaders/advection_vector.glsl", "Vector advection shader");
-	vectorAdvectionProgram.build();
+	ShaderProgram advectionProgram("Advection program");
+	advectionProgram.attachShader(entryPointShader);
+	advectionProgram.attachFile(ShaderType::Compute, "shaders/advection.glsl", "Advection shader");
+	advectionProgram.build();
 
 	ShaderProgram velocityUnpackProgram("Velocity unpack program");
 	velocityUnpackProgram.attachFile(ShaderType::Compute, "shaders/velocity_unpack.glsl", "Velocity unpack shader");
@@ -496,10 +489,12 @@ int main(int argc, char* argv[])
 	velocityPackProgram.build();
 
 	ShaderProgram jacobiProgram("Jacobi program");
+	jacobiProgram.attachShader(entryPointShader);
 	jacobiProgram.attachFile(ShaderType::Compute, "shaders/jacobi.glsl", "Jacobi shader");
 	jacobiProgram.build();
 
 	ShaderProgram forcesProgram("Force application program");
+	forcesProgram.attachShader(entryPointShader);
 	forcesProgram.attachFile(ShaderType::Compute, "shaders/forces.glsl", "Force application shader");
 	forcesProgram.build();
 
@@ -508,16 +503,9 @@ int main(int argc, char* argv[])
 	divergenceProgram.build();
 
 	ShaderProgram projectionProgram("Projection program");
+	projectionProgram.attachShader(entryPointShader);
 	projectionProgram.attachFile(ShaderType::Compute, "shaders/projection.glsl", "Projection shader");
 	projectionProgram.build();
-
-	ShaderProgram scalarBoundaryProgram("Scalar boundary conditions program");
-	scalarBoundaryProgram.attachFile(ShaderType::Compute, "shaders/boundary_scalar.glsl", "Scalar boundary conditions shader");
-	scalarBoundaryProgram.build();
-
-	ShaderProgram vectorBoundaryProgram("Vector boundary conditions program");
-	vectorBoundaryProgram.attachFile(ShaderType::Compute, "shaders/boundary_vector.glsl", "Vector boundary conditions shader");
-	vectorBoundaryProgram.build();
 
 	double then = glfwGetTime();
 	Empty::math::vec2 mouseThen = ImGui::GetMousePos();
@@ -530,6 +518,7 @@ int main(int argc, char* argv[])
 	float forceScale = 500.f;
 
 	// Simulation control variables
+	bool capFPS = false;
 	bool pauseSimulation = false;
 	bool runOneStep = false;
 	bool runAdvection = true;
@@ -564,6 +553,8 @@ int main(int argc, char* argv[])
 		if (ImGui::Begin("Fluid simulation", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
 		{
 			ImGui::TextDisabled("%.1f fps", 1.f / dt);
+			if (ImGui::Checkbox("Cap FPS", &capFPS))
+				glfwSwapInterval(capFPS);
 			ImGui::Checkbox("Pause simulation (P)", &pauseSimulation);
 			if (ImGui::IsKeyPressed(ImGuiKey_P))
 				pauseSimulation = !pauseSimulation;
@@ -620,31 +611,14 @@ int main(int argc, char* argv[])
 
 			// Advect fields along the velocity
 			if (runAdvection)
-			{
-				setupAdvection(vectorAdvectionProgram, fluidState, dt);
-				advectField(vectorAdvectionProgram, fluidState.velocity, fluidState.parameters.gridSize);
-
-				context.memoryBarrier(MemoryBarrierType::ShaderImageAccess);
-
-				setupAdvection(scalarAdvectionProgram, fluidState, dt);
-				advectField(scalarAdvectionProgram, inkDensity, fluidState.parameters.gridSize);
-
-				context.memoryBarrier(MemoryBarrierType::ShaderImageAccess);
-
-				performBoundaryConditions(vectorBoundaryProgram, fluidState.velocity.getInput(), fluidState.parameters.gridSize, noSlipBoundaryCondition);
-				performBoundaryConditions(scalarBoundaryProgram, inkDensity.getInput(), fluidState.parameters.gridSize, zeroBoundaryCondition);
-			}
+				performAdvection(advectionProgram, fluidState, inkDensity, dt, fluidState.parameters.gridSize);
 
 			if (displayDebugTexture && whenDebugTexture == 1)
 				displayTexture(debugDrawProgram, selectDebugTexture(fluidState, whichDebugTexture));
 
 			// Compute viscous diffusion
 			if (runDiffusion)
-			{
-				context.memoryBarrier(MemoryBarrierType::ShaderImageAccess);
-
-				performDiffusion(jacobiProgram, scalarBoundaryProgram, velocityUnpackProgram, velocityPackProgram, fluidState, dt, diffusionJacobiSteps);
-			}
+				performDiffusion(jacobiProgram, velocityUnpackProgram, velocityPackProgram, fluidState, dt, diffusionJacobiSteps);
 
 			if (displayDebugTexture && whenDebugTexture == 2)
 				displayTexture(debugDrawProgram, selectDebugTexture(fluidState, whichDebugTexture));
@@ -659,13 +633,7 @@ int main(int argc, char* argv[])
 				impulse.position.y = fluidState.parameters.gridSize.y - impulse.position.y;
 
 				context.memoryBarrier(MemoryBarrierType::ShaderImageAccess);
-
 				performForcesApplication(forcesProgram, fluidState, inkDensity, impulse, dt);
-
-				context.memoryBarrier(MemoryBarrierType::ShaderImageAccess);
-
-				performBoundaryConditions(vectorBoundaryProgram, fluidState.velocity.getInput(), fluidState.parameters.gridSize, noSlipBoundaryCondition);
-				performBoundaryConditions(scalarBoundaryProgram, inkDensity.getInput(), fluidState.parameters.gridSize, zeroBoundaryCondition);
 			}
 			// Only apply the force when the right mouse button is clicked
 			else if (ImGui::IsMouseDown(ImGuiMouseButton_Right) && !ImGui::GetIO().WantCaptureMouse)
@@ -680,13 +648,7 @@ int main(int argc, char* argv[])
 				impulse.inkAmount = 0;
 
 				context.memoryBarrier(MemoryBarrierType::ShaderImageAccess);
-
 				performForcesApplication(forcesProgram, fluidState, inkDensity, impulse, dt);
-
-				context.memoryBarrier(MemoryBarrierType::ShaderImageAccess);
-
-				performBoundaryConditions(vectorBoundaryProgram, fluidState.velocity.getInput(), fluidState.parameters.gridSize, noSlipBoundaryCondition);
-				performBoundaryConditions(scalarBoundaryProgram, inkDensity.getInput(), fluidState.parameters.gridSize, zeroBoundaryCondition);
 
 				impulse.inkAmount = temp;
 			}
@@ -698,7 +660,6 @@ int main(int argc, char* argv[])
 			if (runDivergence)
 			{
 				context.memoryBarrier(MemoryBarrierType::ShaderImageAccess);
-
 				performDivergenceComputation(divergenceProgram, fluidState);
 			}
 
@@ -709,7 +670,7 @@ int main(int argc, char* argv[])
 			if (runPressure)
 			{
 				context.memoryBarrier(MemoryBarrierType::ShaderImageAccess);
-				performPressureComputation(jacobiProgram, scalarBoundaryProgram, fluidState, pressureJacobiSteps);
+				performPressureComputation(jacobiProgram, fluidState, pressureJacobiSteps);
 			}
 
 			if (displayDebugTexture && whenDebugTexture == 5)
@@ -719,12 +680,7 @@ int main(int argc, char* argv[])
 			if (runProjection)
 			{
 				context.memoryBarrier(MemoryBarrierType::ShaderImageAccess);
-
 				performProjection(projectionProgram, fluidState);
-
-				context.memoryBarrier(MemoryBarrierType::ShaderImageAccess);
-
-				performBoundaryConditions(vectorBoundaryProgram, fluidState.velocity.getInput(), fluidState.parameters.gridSize, noSlipBoundaryCondition);
 			}
 
 			if (displayDebugTexture && whenDebugTexture == 6)

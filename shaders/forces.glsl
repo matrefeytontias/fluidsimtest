@@ -1,29 +1,24 @@
 #version 450
 
-layout(local_size_x = 32, local_size_y = 32) in;
-
 uniform float udt;
 uniform vec2 uMouseClick;
 uniform vec2 uForceMagnitude;
-uniform float uForceRadius;
+uniform float uOneOverForceRadius;
 uniform float uInkAmount;
 
 layout(binding = 0, rg32f) uniform restrict image2D uVelocity;
 layout(binding = 1, r32f) uniform restrict image2D uInkDensity;
 
-void main()
+void compute(ivec2 texel, ivec2 outputTexel, bool boundaryTexel)
 {
-	ivec2 texel = ivec2(gl_GlobalInvocationID.xy);
-	if(any(texel == 0) || any(texel == imageSize(uVelocity) - 1))
-		return;
-
 	vec2 vector = vec2(texel) - uMouseClick;
-	float factor = udt * exp2(-dot(vector, vector) / uForceRadius);
-	vec2 force = uForceMagnitude * factor;
-	
-	imageStore(uVelocity, texel, imageLoad(uVelocity, texel) + force.xyxx);
-	
-	float newInk = imageLoad(uInkDensity, texel).r + uInkAmount * factor;
+	float factor = udt * exp2(-dot(vector, vector) * uOneOverForceRadius);
 
-	imageStore(uInkDensity, texel, vec4(newInk));
+	vec2 newVelocity = uForceMagnitude * factor + imageLoad(uVelocity, texel).xy;
+	// Velocity respects the no-slip boundary condition
+	imageStore(uVelocity, outputTexel, boundaryTexel ? -newVelocity.xyxx: newVelocity.xyxx);
+	
+	float newInk = uInkAmount * factor + imageLoad(uInkDensity, texel).r;
+	// Ink respects the zero boundary condition
+	imageStore(uInkDensity, outputTexel, vec4(boundaryTexel ? 0. : newInk));
 }

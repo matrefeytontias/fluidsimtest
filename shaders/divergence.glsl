@@ -5,13 +5,11 @@ layout(local_size_x = 32, local_size_y = 32) in;
 uniform float uHalfOneOverDx;
 
 layout(binding = 0, rg32f) uniform restrict readonly image2D uVelocity;
-layout(binding = 2, r32f) uniform restrict writeonly image2D uFieldOut;
+layout(binding = 1, r32f) uniform restrict writeonly image2D uFieldOut;
 
 void main()
 {
 	ivec2 texel = ivec2(gl_GlobalInvocationID.xy);
-	if(any(texel == 0) || any(texel == imageSize(uVelocity) - 1))
-		return;
 
 	float xleft = imageLoad(uVelocity, texel + ivec2(-1,  0)).x,
 		 xright = imageLoad(uVelocity, texel + ivec2( 1,  0)).x,

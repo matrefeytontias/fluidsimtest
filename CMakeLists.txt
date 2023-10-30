@@ -22,10 +22,8 @@ set_property(DIRECTORY PROPERTY VS_STARTUP_PROJECT FluidSimTest)
 
 set(RESOURCES
     # Fluid sim shaders
-    shaders/advection_scalar.glsl
-    shaders/advection_vector.glsl
-    shaders/boundary_scalar.glsl
-    shaders/boundary_vector.glsl
+    shaders/entry_point.glsl
+    shaders/advection.glsl
     shaders/divergence.glsl
     shaders/forces.glsl
     shaders/jacobi.glsl

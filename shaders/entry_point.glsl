@@ -2,11 +2,8 @@
 
 layout(local_size_x = 32, local_size_y = 32) in;
 
-uniform float uBoundaryCondition;
-
-layout(binding = 0, r32f) uniform restrict writeonly image2D uFieldOut;
-
-float compute(ivec2 texel);
+// Unify computations and boundary condition enforcement
+void compute(ivec2 inputTexel, ivec2 outputTexel, bool boundaryTexel);
 
 void main()
 {
@@ -20,7 +17,5 @@ void main()
 	bool isBoundaryTexel = any(bBottomLeft) || any(bTopRight);
 	ivec2 boundaryOffset = ivec2(bBottomLeft) - ivec2(bTopRight);
 
-	float newValue = compute(isBoundaryTexel ? texel + boundaryOffset : texel);
-
-	imageStore(uFieldOut, texel, vec4(isBoundaryTexel ? newValue * uBoundaryCondition : newValue));
+	compute(isBoundaryTexel ? texel + boundaryOffset : texel, texel, isBoundaryTexel);
 }
