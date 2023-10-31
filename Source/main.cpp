@@ -513,9 +513,9 @@ int main(int argc, char* argv[])
 	int diffusionJacobiSteps = 100;
 	int pressureJacobiSteps = 100;
 	FluidSimMouseClickImpulse impulse;
-	impulse.radius = 240.f;
-	impulse.inkAmount = 7.f;
-	float forceScale = 500.f;
+	impulse.radius = 40.f;
+	impulse.inkAmount = 20.f;
+	float forceScale = 5.f;
 
 	// Simulation control variables
 	bool capFPS = false;
@@ -589,9 +589,9 @@ int main(int argc, char* argv[])
 			ImGui::SliderFloat("Kinematic viscosity (m^2/s)", &fluidState.parameters.viscosity, 0.f, 0.005f, "%.5f");
 			ImGui::Separator();
 			ImGui::TextDisabled("Mouse click impulse parameters");
-			ImGui::DragFloat("Force scale", &forceScale);
-			ImGui::DragFloat("Force radius", &impulse.radius, 1.f, 0.001f);
-			ImGui::DragFloat("Ink injection", &impulse.inkAmount);
+			ImGui::DragFloat("Force scale", &forceScale, 0.1f, 0.f, 20.f);
+			ImGui::DragFloat("Force radius", &impulse.radius, 1.f, 1.f);
+			ImGui::DragFloat("Ink injection", &impulse.inkAmount, 0.5f, 0.f, 50.f);
 			ImGui::Separator();
 			ImGui::TextDisabled("Debug texture display");
 			ImGui::Checkbox("Display debug texture", &displayDebugTexture);
