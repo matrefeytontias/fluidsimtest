@@ -17,5 +17,5 @@ void main()
 	bool isBoundaryTexel = any(bBottomLeft) || any(bTopRight);
 	ivec2 boundaryOffset = ivec2(bBottomLeft) - ivec2(bTopRight);
 
-	compute(isBoundaryTexel ? texel + boundaryOffset : texel, texel, isBoundaryTexel);
+	compute(texel + boundaryOffset, texel, isBoundaryTexel);
 }
