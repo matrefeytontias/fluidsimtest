@@ -134,15 +134,17 @@ constexpr float neumannBoundaryCondition = 1.f;
 // f(boundary) = 0
 constexpr float zeroBoundaryCondition = 0.f;
 
+constexpr int entryPointWorkGroupX = 32;
+constexpr int entryPointWorkGroupY = 32;
+
+std::unique_ptr<Buffer> entryPointIndirectDispatchBuffer;
+
 // ********************************************
 // Functions for advancing the fluid simulation
 // ********************************************
 
 void performAdvection(ShaderProgram& advectionProgram, FluidState& fluidState, BufferedScalarField& inkDensity, float dt, Empty::math::uvec2 gridSize)
 {
-	constexpr int advectionWorkGroupX = 32;
-	constexpr int advectionWorkGroupY = 32;
-
 	Context& context = Context::get();
 
 	auto& params = fluidState.parameters;
@@ -173,7 +175,7 @@ void performAdvection(ShaderProgram& advectionProgram, FluidState& fluidState, B
 	context.bind(inkOut.getLevel(0), advectionInkDensityOutBinding, AccessPolicy::WriteOnly, GPUScalarField::Format);
 
 	context.setShaderProgram(advectionProgram);
-	context.dispatchCompute(gridSize.x / advectionWorkGroupX, gridSize.y / advectionWorkGroupY, 1);
+	context.dispatchComputeIndirect();
 
 	fluidState.velocity.swap();
 	inkDensity.swap();
@@ -181,13 +183,9 @@ void performAdvection(ShaderProgram& advectionProgram, FluidState& fluidState, B
 
 void performJacobiIterations(ShaderProgram& jacobiProgram, GPUScalarField& fieldSource, GPUScalarField& fieldIn, GPUScalarField& fieldOut, Empty::math::uvec2 gridSize, int jacobiSteps)
 {
-	constexpr int jacobiWorkGroupX = 32;
-	constexpr int jacobiWorkGroupY = 32;
-
 	assert(jacobiSteps > 0);
 
 	static std::unique_ptr<GPUScalarField> workingField;
-	static std::unique_ptr<Buffer> jacobiDispatchArgs;
 
 	if (!workingField)
 	{
@@ -195,18 +193,7 @@ void performJacobiIterations(ShaderProgram& jacobiProgram, GPUScalarField& field
 		workingField->setStorage(1, gridSize.x, gridSize.y);
 	}
 
-	if (!jacobiDispatchArgs)
-	{
-		jacobiDispatchArgs = std::make_unique<Buffer>("Jacobi indirect dispatch args");
-		jacobiDispatchArgs->setStorage(sizeof(Empty::math::uvec3), BufferUsage::StreamDraw);
-	}
-	{
-		Empty::math::uvec3 dispatch(gridSize.x / jacobiWorkGroupX, gridSize.y / jacobiWorkGroupY, 1);
-		jacobiDispatchArgs->uploadData(0, sizeof(dispatch), dispatch);
-	}
-
 	Context& context = Context::get();
-	context.bind(*jacobiDispatchArgs, BufferTarget::DispatchIndirect);
 
 	jacobiProgram.registerTexture("uFieldSource", fieldSource, false);
 	context.bind(fieldSource.getLevel(0), jacobiSourceBinding, AccessPolicy::ReadOnly, GPUScalarField::Format);
@@ -241,9 +228,6 @@ void performJacobiIterations(ShaderProgram& jacobiProgram, GPUScalarField& field
 void performDiffusion(ShaderProgram& jacobiProgram, ShaderProgram& velocityUnpackProgram, ShaderProgram& velocityPackProgram,
 	FluidState& fluidState, float dt, int jacobiSteps)
 {
-	constexpr int velocityPackingWorkGroupX = 32;
-	constexpr int velocityPackingWorkGroupY = 32;
-
 	static std::unique_ptr<BufferedScalarField> velocityX;
 	static std::unique_ptr<BufferedScalarField> velocityY;
 
@@ -280,7 +264,7 @@ void performDiffusion(ShaderProgram& jacobiProgram, ShaderProgram& velocityUnpac
 		context.bind(velocityYTex.getLevel(0), velocityPackingYBinding, AccessPolicy::WriteOnly, GPUScalarField::Format);
 		context.setShaderProgram(velocityUnpackProgram);
 		context.memoryBarrier(MemoryBarrierType::ShaderImageAccess);
-		context.dispatchCompute(params.gridSize.x / velocityPackingWorkGroupX, params.gridSize.y / velocityPackingWorkGroupY, 1);
+		context.dispatchComputeIndirect();
 
 		velocityX->swap();
 		velocityY->swap();
@@ -311,7 +295,7 @@ void performDiffusion(ShaderProgram& jacobiProgram, ShaderProgram& velocityUnpac
 		context.bind(velocityYTex.getLevel(0), velocityPackingYBinding, AccessPolicy::ReadOnly, GPUScalarField::Format);
 		context.setShaderProgram(velocityPackProgram);
 		context.memoryBarrier(MemoryBarrierType::ShaderImageAccess);
-		context.dispatchCompute(params.gridSize.x / velocityPackingWorkGroupX, params.gridSize.y / velocityPackingWorkGroupY, 1);
+		context.dispatchComputeIndirect();
 	}
 
 	fluidState.velocity.swap();
@@ -319,9 +303,6 @@ void performDiffusion(ShaderProgram& jacobiProgram, ShaderProgram& velocityUnpac
 
 void performForcesApplication(ShaderProgram& forcesProgram, FluidState& fluidState, BufferedScalarField& inkDensity, FluidSimMouseClickImpulse& impulse, float dt)
 {
-	constexpr int forcesWorkGroupX = 32;
-	constexpr int forcesWorkGroupY = 32;
-
 	const auto& params = fluidState.parameters;
 
 	Context& context = Context::get();
@@ -340,16 +321,13 @@ void performForcesApplication(ShaderProgram& forcesProgram, FluidState& fluidSta
 	context.bind(inkTex.getLevel(0), allInkDensityBinding, AccessPolicy::ReadWrite, GPUScalarField::Format);
 
 	context.setShaderProgram(forcesProgram);
-	context.dispatchCompute(params.gridSize.x / forcesWorkGroupX, params.gridSize.y / forcesWorkGroupY, 1);
+	context.dispatchComputeIndirect();
 
 	// Don't swap textures since we read from and write to the same textures
 }
 
 void performDivergenceComputation(ShaderProgram& divergenceProgram, FluidState& fluidState)
 {
-	constexpr int divergenceWorkGroupX = 32;
-	constexpr int divergenceWorkGroupY = 32;
-
 	const auto& params = fluidState.parameters;
 
 	Context& context = Context::get();
@@ -363,7 +341,7 @@ void performDivergenceComputation(ShaderProgram& divergenceProgram, FluidState& 
 	context.bind(fluidState.divergenceTex.getLevel(0), divergenceOutBinding, AccessPolicy::WriteOnly, GPUScalarField::Format);
 
 	context.setShaderProgram(divergenceProgram);
-	context.dispatchCompute(params.gridSize.x / divergenceWorkGroupX, params.gridSize.y / divergenceWorkGroupY, 1);
+	context.dispatchComputeIndirect();
 }
 
 void performPressureComputation(ShaderProgram& jacobiProgram, FluidState& fluidState, int jacobiSteps)
@@ -391,9 +369,6 @@ void performPressureComputation(ShaderProgram& jacobiProgram, FluidState& fluidS
 
 void performProjection(ShaderProgram& projectionProgram, FluidState& fluidState)
 {
-	constexpr int projectionWorkGroupX = 32;
-	constexpr int projectionWorkGroupY = 32;
-
 	const auto& params = fluidState.parameters;
 
 	Context& context = Context::get();
@@ -408,7 +383,7 @@ void performProjection(ShaderProgram& projectionProgram, FluidState& fluidState)
 	context.bind(pressureTex.getLevel(0), projectionPressureBinding, AccessPolicy::ReadOnly, GPUScalarField::Format);
 
 	context.setShaderProgram(projectionProgram);
-	context.dispatchCompute(params.gridSize.x / projectionWorkGroupX, params.gridSize.y / projectionWorkGroupY, 1);
+	context.dispatchComputeIndirect();
 
 	// Don't swap textures since we read from and write to the same textures
 }
@@ -474,6 +449,15 @@ int main(int argc, char* argv[])
 	Shader entryPointShader(ShaderType::Compute, "Entry point shader");
 	if (!entryPointShader.setSourceFromFile("shaders/entry_point.glsl"))
 		FATAL("Failed to compile scalar entry point shader:\n" << entryPointShader.getLog());
+
+	// Create and set the indirect dispatch arguments buffer
+	{
+		Empty::math::uvec3 dispatch(fluidState.parameters.gridSize.x / entryPointWorkGroupX, fluidState.parameters.gridSize.y / entryPointWorkGroupY, 1);
+		entryPointIndirectDispatchBuffer = std::make_unique<Buffer>("Entry point indirect dispatch args");
+		entryPointIndirectDispatchBuffer->setStorage(sizeof(dispatch), BufferUsage::StaticDraw, dispatch);
+		// This buffer stays bound there and never changes
+		context.bind(*entryPointIndirectDispatchBuffer, BufferTarget::DispatchIndirect);
+	}
 
 	ShaderProgram advectionProgram("Advection program");
 	advectionProgram.attachShader(entryPointShader);
