@@ -118,7 +118,8 @@ constexpr int advectionInkDensityOutBinding = 3;
 
 constexpr int jacobiSourceBinding = 0;
 constexpr int jacobiFieldInBinding = 1;
-constexpr int jacobiFieldOutBinding = 2;
+constexpr int jacobiWorkingFieldBinding = 2;
+constexpr int jacobiFieldOutBinding = 3;
 
 constexpr int divergenceOutBinding = 1;
 
@@ -198,21 +199,23 @@ void performJacobiIterations(ShaderProgram& jacobiProgram, GPUScalarField& field
 	jacobiProgram.registerTexture("uFieldSource", fieldSource, false);
 	context.bind(fieldSource.getLevel(0), jacobiSourceBinding, AccessPolicy::ReadOnly, GPUScalarField::Format);
 
+	context.bind(fieldIn.getLevel(0), jacobiFieldInBinding, AccessPolicy::ReadWrite, GPUScalarField::Format);
+	context.bind(workingField->getLevel(0), jacobiWorkingFieldBinding, AccessPolicy::ReadWrite, GPUScalarField::Format);
+	context.bind(fieldOut.getLevel(0), jacobiFieldOutBinding, AccessPolicy::ReadWrite, GPUScalarField::Format);
+
 	// Alternate writes between the working texture and the output field so we write to the output
 	// field last. The first step uses the actual input field as input, the other steps alternate between
 	// working field and output field.
 	bool writeToWorkingField = (jacobiSteps & 1) == 0;
-	GPUScalarField* iterationFieldIn = &fieldIn;
-	GPUScalarField* iterationFieldOut = writeToWorkingField ? workingField.get() : &fieldOut;
+	int iterationFieldIn = jacobiFieldInBinding;
+	int iterationFieldOut = writeToWorkingField ? jacobiWorkingFieldBinding: jacobiFieldOutBinding;
 
 	context.setShaderProgram(jacobiProgram);
 
 	for (int iteration = 0; iteration < jacobiSteps; ++iteration)
 	{
-		jacobiProgram.registerTexture("uFieldIn", *iterationFieldIn, false);
-		jacobiProgram.registerTexture("uFieldOut", *iterationFieldOut, false);
-		context.bind(iterationFieldIn->getLevel(0), jacobiFieldInBinding, AccessPolicy::ReadOnly, GPUScalarField::Format);
-		context.bind(iterationFieldOut->getLevel(0), jacobiFieldOutBinding, AccessPolicy::WriteOnly, GPUScalarField::Format);
+		jacobiProgram.uniform("uFieldIn", iterationFieldIn);
+		jacobiProgram.uniform("uFieldOut", iterationFieldOut);
 
 		context.memoryBarrier(MemoryBarrierType::ShaderImageAccess);
 		context.dispatchComputeIndirect();
@@ -221,7 +224,7 @@ void performJacobiIterations(ShaderProgram& jacobiProgram, GPUScalarField& field
 		// which is used as iterationFieldIn for the first iteration.
 		writeToWorkingField = !writeToWorkingField;
 		iterationFieldIn = iterationFieldOut;
-		iterationFieldOut = writeToWorkingField ? workingField.get() : &fieldOut;
+		iterationFieldOut = writeToWorkingField ? jacobiWorkingFieldBinding : jacobiFieldOutBinding;
 	}
 }
 

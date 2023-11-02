@@ -5,8 +5,8 @@ uniform float uOneOverBeta;
 uniform float uBoundaryCondition;
 
 layout(binding = 0, r32f) uniform readonly image2D uFieldSource;
-layout(binding = 1, r32f) uniform readonly image2D uFieldIn;
-layout(binding = 2, r32f) uniform restrict writeonly image2D uFieldOut;
+layout(r32f) uniform image2D uFieldIn;
+layout(r32f) uniform restrict image2D uFieldOut;
 
 // Performs one Jacobi iteration to solve a Poisson equation
 // Lx = b
