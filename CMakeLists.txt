@@ -10,7 +10,11 @@ project(FluidSim DESCRIPTION "Fluid simulation playground" LANGUAGES C CXX)
 
 set(SOURCES
     Source/main.cpp
-    Source/Context.h)
+    Source/Context.h
+    Source/fields.hpp
+    Source/fluid.hpp
+    Source/solver.hpp
+    Source/solver.cpp)
 
 add_executable(FluidSimTest ${SOURCES})
 
