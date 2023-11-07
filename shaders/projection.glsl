@@ -1,7 +1,5 @@
 #version 450
 
-layout(local_size_x = 32, local_size_y = 32) in;
-
 uniform float uHalfOneOverDx;
 
 layout(binding = 0, rg32f) uniform restrict image2D uVelocity;

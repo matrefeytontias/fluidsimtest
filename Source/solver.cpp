@@ -398,7 +398,7 @@ FluidSim::FluidSim(Empty::math::uvec2 gridSize)
 	, _entryPointIndirectDispatchBuffer("Entry point indirect dispatch args")
 {
 	if (!_entryPointShader.setSourceFromFile("shaders/entry_point.glsl"))
-		FATAL("Failed to compile scalar entry point shader:\n" << _entryPointShader.getLog());
+		FATAL("Failed to compile entry point shader:\n" << _entryPointShader.getLog());
 
 	_jacobiProgram.attachShader(_entryPointShader);
 	_jacobiProgram.attachFile(ShaderType::Compute, "shaders/jacobi.glsl", "Jacobi shader");

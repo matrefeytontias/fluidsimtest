@@ -143,6 +143,7 @@ struct FluidSim
 private:
 	std::unordered_map<FluidSimHookId, std::pair<FluidSimHook, FluidSimHookStage>> _hooks;
 	FluidSimHookId _nextHookId;
+
 	Empty::gl::Shader _entryPointShader;
 	Empty::gl::ShaderProgram _jacobiProgram;
 
