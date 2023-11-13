@@ -60,10 +60,6 @@ namespace fluidsim
 
 		void compute(Empty::gl::ShaderProgram& jacobiProgram, FluidState& fluidState, float dt, int jacobiIterations);
 
-		Empty::gl::ShaderProgram velocityUnpackProgram;
-		Empty::gl::ShaderProgram velocityPackProgram;
-		BufferedScalarField velocityX;
-		BufferedScalarField velocityY;
 		JacobiIterator jacobiX;
 		JacobiIterator jacobiY;
 	};

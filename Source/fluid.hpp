@@ -40,7 +40,8 @@ struct FluidState
 {
 	FluidState(Empty::math::uvec2 gridSize, float gridCellSize, float density, float viscosity) :
 		parameters{ gridSize, gridCellSize, density, viscosity },
-		velocity{ "Velocity", gridSize },
+		velocityX{ "Velocity X", gridSize },
+		velocityY{ "Velocity Y", gridSize },
 		pressure{ "Pressure", gridSize },
 		divergenceTex("Divergence"),
 		inkDensity{ "Ink density", gridSize }
@@ -50,7 +51,8 @@ struct FluidState
 
 	void reset()
 	{
-		velocity.clear();
+		velocityX.clear();
+		velocityY.clear();
 		pressure.clear();
 		divergenceTex.template clearLevel<Empty::gl::DataFormat::Red, Empty::gl::DataType::Float>(0);
 		inkDensity.clear();
@@ -59,7 +61,8 @@ struct FluidState
 	FluidSimParameters parameters;
 
 	// Fields we need
-	BufferedVectorField velocity;
+	BufferedScalarField velocityX;
+	BufferedScalarField velocityY;
 	BufferedScalarField pressure;
 	GPUScalarField divergenceTex;
 

@@ -32,8 +32,6 @@ set(RESOURCES
     shaders/forces.glsl
     shaders/jacobi.glsl
     shaders/projection.glsl
-    shaders/velocity_pack.glsl
-    shaders/velocity_unpack.glsl
     # Debug shaders
     shaders/debug/vertex.glsl
     shaders/debug/fragment.glsl)

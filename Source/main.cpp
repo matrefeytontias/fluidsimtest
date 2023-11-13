@@ -28,10 +28,12 @@ TextureInfo selectDebugTexture(FluidState& fluidState, int whichDebugTexture)
 	switch (whichDebugTexture)
 	{
 	case 0:
-		return fluidState.velocity.getInput();
+		return fluidState.velocityX.getInput();
 	case 1:
-		return fluidState.pressure.getInput();
+		return fluidState.velocityY.getInput();
 	case 2:
+		return fluidState.pressure.getInput();
+	case 3:
 		return fluidState.divergenceTex;
 	default:
 		FATAL("invalid requested debug texture");
@@ -151,7 +153,7 @@ int main(int argc, char* argv[])
 			ImGui::Separator();
 			ImGui::TextDisabled("Debug texture display");
 			ImGui::Checkbox("Display debug texture", &displayDebugTexture);
-			ImGui::Combo("Display which", &whichDebugTexture, "Velocity\0Pressure\0Velocity divergence\0");
+			ImGui::Combo("Display which", &whichDebugTexture, "Velocity X\0Velocity Y\0Pressure\0Velocity divergence\0");
 			if (ImGui::Combo("Display when", &whenDebugTexture, "Start of frame\0After advection\0After diffusion\0After divergence\0After pressure computation\0After projection\0\0"))
 				fluidSim.modifyHookStage(debugTextureLambdaHookId, static_cast<FluidSimHookStage>(whenDebugTexture));
 

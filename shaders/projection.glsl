@@ -2,8 +2,9 @@
 
 uniform float uHalfOneOverDx;
 
-layout(binding = 0, rg32f) uniform restrict image2D uVelocity;
-layout(binding = 1, r32f) uniform restrict readonly image2D uPressure;
+layout(binding = 0, r32f) uniform restrict image2D uVelocityX;
+layout(binding = 1, r32f) uniform restrict image2D uVelocityY;
+layout(binding = 2, r32f) uniform restrict readonly image2D uPressure;
 
 void compute(ivec2 texel, ivec2 outputTexel, bool boundaryTexel)
 {
@@ -14,9 +15,12 @@ void compute(ivec2 texel, ivec2 outputTexel, bool boundaryTexel)
 
 	vec2 pressureGradient = uHalfOneOverDx * vec2(pright - pleft, pup - pdown);
 	
-	vec4 old = imageLoad(uVelocity, texel);
-	vec4 newValue = old - pressureGradient.xyxx;
+	float oldx = imageLoad(uVelocityX, texel).r;
+	float oldy = imageLoad(uVelocityY, texel).r;
+	float newx = oldx - pressureGradient.x;
+	float newy = oldy - pressureGradient.y;
 
 	// Velocity respects the no-slip boundary condition
-	imageStore(uVelocity, outputTexel, boundaryTexel ? -newValue : newValue);
+	imageStore(uVelocityX, outputTexel, vec4(boundaryTexel ? -newx : newx));
+	imageStore(uVelocityY, outputTexel, vec4(boundaryTexel ? -newy : newy));
 }

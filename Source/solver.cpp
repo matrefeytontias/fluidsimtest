@@ -15,18 +15,17 @@ using namespace Empty::gl;
 // Shared constants related to fluid simulation
 // ********************************************
 
-constexpr int allVelocityBinding = 0;
-constexpr int allInkDensityBinding = 1;
+constexpr int allVelocityXBinding = 0;
+constexpr int allVelocityYBinding = 1;
+constexpr int allInkDensityBinding = 2;
 
-constexpr int advectionVelocityOutBinding = 2;
-constexpr int advectionInkDensityOutBinding = 3;
+constexpr int advectionVelocityXOutBinding = 3;
+constexpr int advectionVelocityYOutBinding = 4;
+constexpr int advectionInkDensityOutBinding = 5;
 
-constexpr int divergenceOutBinding = 1;
+constexpr int divergenceOutBinding = 2;
 
-constexpr int projectionPressureBinding = 1;
-
-constexpr int velocityPackingXBinding = 1;
-constexpr int velocityPackingYBinding = 2;
+constexpr int projectionPressureBinding = 2;
 
 // f(boundary) + f(neighbour) = 0 -> f(boundary) = -f(neighbour)
 constexpr float noSlipBoundaryCondition = -1.f;
@@ -65,17 +64,25 @@ void fluidsim::AdvectionStep::compute(FluidState& fluidState, float dt)
 
 	// Inputs are exposed with samplers to benefit from bilinear filtering
 
-	auto& velocityTex = fluidState.velocity.getInput();
-	advectionProgram.registerTexture("uVelocity", velocityTex, false);
-	context.bind(velocityTex, allVelocityBinding);
+	auto& velocityXTex = fluidState.velocityX.getInput();
+	advectionProgram.registerTexture("uVelocityX", velocityXTex, false);
+	context.bind(velocityXTex, allVelocityXBinding);
+
+	auto& velocityYTex = fluidState.velocityY.getInput();
+	advectionProgram.registerTexture("uVelocityY", velocityYTex, false);
+	context.bind(velocityYTex, allVelocityYBinding);
 
 	auto& inkTex = fluidState.inkDensity.getInput();
 	advectionProgram.registerTexture("uInkDensity", inkTex, false);
 	context.bind(inkTex, allInkDensityBinding);
 
-	auto& velocityOut = fluidState.velocity.getOutput();
-	advectionProgram.registerTexture("uVelocityOut", velocityOut, false);
-	context.bind(velocityOut.getLevel(0), advectionVelocityOutBinding, AccessPolicy::WriteOnly, GPUVectorField::Format);
+	auto& velocityXOut = fluidState.velocityX.getOutput();
+	advectionProgram.registerTexture("uVelocityXOut", velocityXOut, false);
+	context.bind(velocityXOut.getLevel(0), advectionVelocityXOutBinding, AccessPolicy::WriteOnly, GPUScalarField::Format);
+
+	auto& velocityYOut = fluidState.velocityY.getOutput();
+	advectionProgram.registerTexture("uVelocityYOut", velocityXOut, false);
+	context.bind(velocityYOut.getLevel(0), advectionVelocityYOutBinding, AccessPolicy::WriteOnly, GPUScalarField::Format);
 
 	auto& inkOut = fluidState.inkDensity.getOutput();
 	advectionProgram.registerTexture("uInkDensityOut", inkOut, false);
@@ -84,7 +91,8 @@ void fluidsim::AdvectionStep::compute(FluidState& fluidState, float dt)
 	context.setShaderProgram(advectionProgram);
 	context.dispatchComputeIndirect();
 
-	fluidState.velocity.swap();
+	fluidState.velocityX.swap();
+	fluidState.velocityY.swap();
 	fluidState.inkDensity.swap();
 }
 
@@ -99,6 +107,8 @@ fluidsim::JacobiIterator::JacobiIterator(const std::string& label, Empty::math::
 	, _numIterations(0)
 	, _currentIteration(0)
 	, _writeToWorkingField(true)
+	, _iterationFieldInBinding(-1)
+	, _iterationFieldOutBinding(-1)
 {
 	_workingField.setStorage(1, gridSize.x, gridSize.y);
 }
@@ -169,22 +179,14 @@ void fluidsim::JacobiIterator::reset()
 	_numIterations = 0;
 	_currentIteration = 0;
 	_writeToWorkingField = true;
+	_iterationFieldInBinding = -1;
+	_iterationFieldOutBinding = -1;
 }
 
 fluidsim::DiffusionStep::DiffusionStep(Empty::math::uvec2 gridSize)
-	: velocityUnpackProgram("Velocity unpack program")
-	, velocityPackProgram("Velocity pack program")
-	, velocityX("Velocity unpack X", gridSize)
-	, velocityY("Velocity unpack Y", gridSize)
-	, jacobiX("Diffuse Jacobi X", gridSize)
+	: jacobiX("Diffuse Jacobi X", gridSize)
 	, jacobiY("Diffuse Jacobi Y", gridSize)
-
 {
-	velocityUnpackProgram.attachFile(ShaderType::Compute, "shaders/velocity_unpack.glsl", "Velocity unpack");
-	velocityUnpackProgram.build();
-	
-	velocityPackProgram.attachFile(ShaderType::Compute, "shaders/velocity_pack.glsl", "Velocity pack");
-	velocityPackProgram.build();
 }
 
 void fluidsim::DiffusionStep::compute(ShaderProgram& jacobiProgram, FluidState& fluidState, float dt, int jacobiIterations)
@@ -193,73 +195,33 @@ void fluidsim::DiffusionStep::compute(ShaderProgram& jacobiProgram, FluidState& 
 
 	Context& context = Context::get();
 
-	// Unpack velocity field
-	{
-		auto& velocityTex = fluidState.velocity.getInput();
-		auto& velocityXTex = velocityX.getOutput();
-		auto& velocityYTex = velocityY.getOutput();
-
-		velocityUnpackProgram.registerTexture("uVelocityIn", velocityTex, false);
-		velocityUnpackProgram.registerTexture("uVelocityXOut", velocityXTex, false);
-		velocityUnpackProgram.registerTexture("uVelocityYOut", velocityYTex, false);
-		context.bind(velocityTex.getLevel(0), allVelocityBinding, AccessPolicy::ReadOnly, GPUVectorField::Format);
-		context.bind(velocityXTex.getLevel(0), velocityPackingXBinding, AccessPolicy::WriteOnly, GPUScalarField::Format);
-		context.bind(velocityYTex.getLevel(0), velocityPackingYBinding, AccessPolicy::WriteOnly, GPUScalarField::Format);
-		context.setShaderProgram(velocityUnpackProgram);
-		context.dispatchComputeIndirect();
-
-		velocityX.swap();
-		velocityY.swap();
-	}
-
 	// Perform Jacobi iterations on individual components
+	jacobiX.init(fluidState.velocityX.getInput(), fluidState.velocityX, 0, 1, 2, 3, jacobiIterations);
+	jacobiY.init(fluidState.velocityY.getInput(), fluidState.velocityY, 4, 5, 6, 7, jacobiIterations);
+
+	// Upload solver parameters
 	{
-		jacobiX.init(velocityX.getInput(), velocityX, 0, 1, 2, 3, jacobiIterations);
-		jacobiY.init(velocityY.getInput(), velocityY, 4, 5, 6, 7, jacobiIterations);
-
-		// Upload solver parameters
-		{
-			float alpha = params.gridCellSize * params.gridCellSize / (params.viscosity * dt);
-			float oneOverBeta = 1.f / (alpha + 4.f);
-			jacobiProgram.uniform("uAlpha", alpha);
-			jacobiProgram.uniform("uOneOverBeta", oneOverBeta);
-			jacobiProgram.uniform("uBoundaryCondition", noSlipBoundaryCondition);
-		}
-
-		context.setShaderProgram(jacobiProgram);
-
-		for (int i = 0; i < jacobiIterations; i++)
-		{
-			context.memoryBarrier(MemoryBarrierType::ShaderImageAccess);
-			jacobiX.step(jacobiProgram);
-			jacobiY.step(jacobiProgram);
-		}
-
-		jacobiX.reset();
-		jacobiY.reset();
-
-		velocityX.swap();
-		velocityY.swap();
+		float alpha = params.gridCellSize * params.gridCellSize / (params.viscosity * dt);
+		float oneOverBeta = 1.f / (alpha + 4.f);
+		jacobiProgram.uniform("uAlpha", alpha);
+		jacobiProgram.uniform("uOneOverBeta", oneOverBeta);
+		jacobiProgram.uniform("uBoundaryCondition", noSlipBoundaryCondition);
 	}
 
-	// Pack velocity field
-	{
-		auto& velocityTex = fluidState.velocity.getOutput();
-		auto& velocityXTex = velocityX.getInput();
-		auto& velocityYTex = velocityY.getInput();
+	context.setShaderProgram(jacobiProgram);
 
-		velocityPackProgram.registerTexture("uVelocityOut", velocityTex, false);
-		velocityPackProgram.registerTexture("uVelocityXIn", velocityXTex, false);
-		velocityPackProgram.registerTexture("uVelocityYIn", velocityYTex, false);
-		context.bind(velocityTex.getLevel(0), allVelocityBinding, AccessPolicy::WriteOnly, GPUVectorField::Format);
-		context.bind(velocityXTex.getLevel(0), velocityPackingXBinding, AccessPolicy::ReadOnly, GPUScalarField::Format);
-		context.bind(velocityYTex.getLevel(0), velocityPackingYBinding, AccessPolicy::ReadOnly, GPUScalarField::Format);
-		context.setShaderProgram(velocityPackProgram);
+	for (int i = 0; i < jacobiIterations; i++)
+	{
 		context.memoryBarrier(MemoryBarrierType::ShaderImageAccess);
-		context.dispatchComputeIndirect();
+		jacobiX.step(jacobiProgram);
+		jacobiY.step(jacobiProgram);
 	}
 
-	fluidState.velocity.swap();
+	jacobiX.reset();
+	jacobiY.reset();
+
+	fluidState.velocityX.swap();
+	fluidState.velocityY.swap();
 }
 
 fluidsim::ForcesStep::ForcesStep(Shader& entryPointShader)
@@ -274,7 +236,8 @@ void fluidsim::ForcesStep::compute(FluidState& fluidState, const FluidSimMouseCl
 {
 	Context& context = Context::get();
 
-	auto& velocityTex = fluidState.velocity.getInput();
+	auto& velocityXTex = fluidState.velocityX.getInput();
+	auto& velocityYTex = fluidState.velocityY.getInput();
 	auto& inkTex = fluidState.inkDensity.getInput();
 
 	forcesProgram.uniform("udt", dt);
@@ -282,9 +245,11 @@ void fluidsim::ForcesStep::compute(FluidState& fluidState, const FluidSimMouseCl
 	forcesProgram.uniform("uForceMagnitude", impulse.magnitude);
 	forcesProgram.uniform("uOneOverForceRadius", 1.f / impulse.radius);
 	forcesProgram.uniform("uInkAmount", velocityOnly ? 0.f : impulse.inkAmount);
-	forcesProgram.registerTexture("uVelocity", velocityTex, false);
+	forcesProgram.registerTexture("uVelocityX", velocityXTex, false);
+	forcesProgram.registerTexture("uVelocityY", velocityYTex, false);
 	forcesProgram.registerTexture("uInkDensity", inkTex, false);
-	context.bind(velocityTex.getLevel(0), allVelocityBinding, AccessPolicy::ReadWrite, GPUVectorField::Format);
+	context.bind(velocityXTex.getLevel(0), allVelocityXBinding, AccessPolicy::ReadWrite, GPUScalarField::Format);
+	context.bind(velocityYTex.getLevel(0), allVelocityYBinding, AccessPolicy::ReadWrite, GPUScalarField::Format);
 	context.bind(inkTex.getLevel(0), allInkDensityBinding, AccessPolicy::ReadWrite, GPUScalarField::Format);
 
 	context.setShaderProgram(forcesProgram);
@@ -306,12 +271,15 @@ void fluidsim::DivergenceStep::compute(FluidState& fluidState)
 
 	Context& context = Context::get();
 
-	auto& velocityTex = fluidState.velocity.getInput();
+	auto& velocityXTex = fluidState.velocityX.getInput();
+	auto& velocityYTex = fluidState.velocityY.getInput();
 
 	divergenceProgram.uniform("uHalfOneOverDx", 1.f / (2.f * params.gridCellSize));
-	divergenceProgram.registerTexture("uVelocity", velocityTex, false);
+	divergenceProgram.registerTexture("uVelocityX", velocityXTex, false);
+	divergenceProgram.registerTexture("uVelocityY", velocityYTex, false);
 	divergenceProgram.registerTexture("uFieldOut", fluidState.divergenceTex, false);
-	context.bind(velocityTex.getLevel(0), allVelocityBinding, AccessPolicy::ReadOnly, GPUVectorField::Format);
+	context.bind(velocityXTex.getLevel(0), allVelocityXBinding, AccessPolicy::ReadOnly, GPUScalarField::Format);
+	context.bind(velocityYTex.getLevel(0), allVelocityYBinding, AccessPolicy::ReadOnly, GPUScalarField::Format);
 	context.bind(fluidState.divergenceTex.getLevel(0), divergenceOutBinding, AccessPolicy::WriteOnly, GPUScalarField::Format);
 
 	context.setShaderProgram(divergenceProgram);
@@ -368,13 +336,16 @@ void fluidsim::ProjectionStep::compute(FluidState& fluidState)
 
 	Context& context = Context::get();
 
-	auto& velocityTex = fluidState.velocity.getInput();
+	auto& velocityXTex = fluidState.velocityX.getInput();
+	auto& velocityYTex = fluidState.velocityY.getInput();
 	auto& pressureTex = fluidState.pressure.getInput();
 
 	projectionProgram.uniform("uHalfOneOverDx", 1.f / (2.f * params.gridCellSize));
-	projectionProgram.registerTexture("uVelocity", velocityTex, false);
+	projectionProgram.registerTexture("uVelocityX", velocityXTex, false);
+	projectionProgram.registerTexture("uVelocityY", velocityYTex, false);
 	projectionProgram.registerTexture("uPressure", pressureTex, false);
-	context.bind(velocityTex.getLevel(0), allVelocityBinding, AccessPolicy::ReadWrite, GPUVectorField::Format);
+	context.bind(velocityXTex.getLevel(0), allVelocityXBinding, AccessPolicy::ReadWrite, GPUScalarField::Format);
+	context.bind(velocityYTex.getLevel(0), allVelocityYBinding, AccessPolicy::ReadWrite, GPUScalarField::Format);
 	context.bind(pressureTex.getLevel(0), projectionPressureBinding, AccessPolicy::ReadOnly, GPUScalarField::Format);
 
 	context.setShaderProgram(projectionProgram);
