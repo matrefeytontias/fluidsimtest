@@ -17,11 +17,11 @@ using namespace Empty::gl;
 
 constexpr int allVelocityXBinding = 0;
 constexpr int allVelocityYBinding = 1;
-constexpr int allInkDensityBinding = 2;
 
-constexpr int advectionVelocityXOutBinding = 3;
-constexpr int advectionVelocityYOutBinding = 4;
-constexpr int advectionInkDensityOutBinding = 5;
+constexpr int advectionFieldInBinding = 2;
+constexpr int advectionFieldOutBinding = 3;
+
+constexpr int forcesFieldBinding = 0;
 
 constexpr int divergenceOutBinding = 2;
 
@@ -72,24 +72,27 @@ void fluidsim::AdvectionStep::compute(FluidState& fluidState, float dt)
 	advectionProgram.registerTexture("uVelocityY", velocityYTex, false);
 	context.bind(velocityYTex, allVelocityYBinding);
 
-	auto& inkTex = fluidState.inkDensity.getInput();
-	advectionProgram.registerTexture("uInkDensity", inkTex, false);
-	context.bind(inkTex, allInkDensityBinding);
-
-	auto& velocityXOut = fluidState.velocityX.getOutput();
-	advectionProgram.registerTexture("uVelocityXOut", velocityXOut, false);
-	context.bind(velocityXOut.getLevel(0), advectionVelocityXOutBinding, AccessPolicy::WriteOnly, GPUScalarField::Format);
-
-	auto& velocityYOut = fluidState.velocityY.getOutput();
-	advectionProgram.registerTexture("uVelocityYOut", velocityXOut, false);
-	context.bind(velocityYOut.getLevel(0), advectionVelocityYOutBinding, AccessPolicy::WriteOnly, GPUScalarField::Format);
-
-	auto& inkOut = fluidState.inkDensity.getOutput();
-	advectionProgram.registerTexture("uInkDensityOut", inkOut, false);
-	context.bind(inkOut.getLevel(0), advectionInkDensityOutBinding, AccessPolicy::WriteOnly, GPUScalarField::Format);
-
 	context.setShaderProgram(advectionProgram);
-	context.dispatchComputeIndirect();
+
+	auto advect = [this, &context](BufferedScalarField& field, float boundaryCondition)
+		{
+			auto& fieldIn = field.getInput();
+			advectionProgram.registerTexture("uFieldIn", fieldIn, false);
+			context.bind(fieldIn, advectionFieldInBinding);
+
+			auto& fieldOut = field.getOutput();
+			advectionProgram.registerTexture("uFieldOut", fieldOut, false);
+			context.bind(fieldOut.getLevel(0), advectionFieldOutBinding, AccessPolicy::WriteOnly, GPUScalarField::Format);
+
+			advectionProgram.uniform("uBoundaryCondition", boundaryCondition);
+
+			context.dispatchComputeIndirect();
+		};
+
+	context.memoryBarrier(MemoryBarrierType::ShaderImageAccess);
+	advect(fluidState.velocityX, noSlipBoundaryCondition);
+	advect(fluidState.velocityY, noSlipBoundaryCondition);
+	advect(fluidState.inkDensity, zeroBoundaryCondition);
 
 	fluidState.velocityX.swap();
 	fluidState.velocityY.swap();
@@ -240,20 +243,25 @@ void fluidsim::ForcesStep::compute(FluidState& fluidState, const FluidSimMouseCl
 	auto& velocityYTex = fluidState.velocityY.getInput();
 	auto& inkTex = fluidState.inkDensity.getInput();
 
-	forcesProgram.uniform("udt", dt);
 	forcesProgram.uniform("uMouseClick", impulse.position);
-	forcesProgram.uniform("uForceMagnitude", impulse.magnitude);
 	forcesProgram.uniform("uOneOverForceRadius", 1.f / impulse.radius);
-	forcesProgram.uniform("uInkAmount", velocityOnly ? 0.f : impulse.inkAmount);
-	forcesProgram.registerTexture("uVelocityX", velocityXTex, false);
-	forcesProgram.registerTexture("uVelocityY", velocityYTex, false);
-	forcesProgram.registerTexture("uInkDensity", inkTex, false);
-	context.bind(velocityXTex.getLevel(0), allVelocityXBinding, AccessPolicy::ReadWrite, GPUScalarField::Format);
-	context.bind(velocityYTex.getLevel(0), allVelocityYBinding, AccessPolicy::ReadWrite, GPUScalarField::Format);
-	context.bind(inkTex.getLevel(0), allInkDensityBinding, AccessPolicy::ReadWrite, GPUScalarField::Format);
 
 	context.setShaderProgram(forcesProgram);
-	context.dispatchComputeIndirect();
+
+	auto applyForce = [this, &context](GPUScalarField& field, float forceMagnitude, float boundaryCondition)
+	{
+		forcesProgram.registerTexture("uField", field, false);
+		context.bind(field.getLevel(0), forcesFieldBinding, AccessPolicy::ReadWrite, GPUScalarField::Format);
+
+		forcesProgram.uniform("uForceMagnitude", forceMagnitude);
+		forcesProgram.uniform("uBoundaryCondition", boundaryCondition);
+		context.dispatchComputeIndirect();
+	};
+
+	context.memoryBarrier(MemoryBarrierType::ShaderImageAccess);
+	applyForce(fluidState.velocityX.getInput(), impulse.magnitude.x, noSlipBoundaryCondition);
+	applyForce(fluidState.velocityY.getInput(), impulse.magnitude.y, noSlipBoundaryCondition);
+	applyForce(fluidState.inkDensity.getInput(), impulse.inkAmount * dt, zeroBoundaryCondition);
 
 	// Don't swap textures since we read from and write to the same textures
 }
