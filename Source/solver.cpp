@@ -98,7 +98,6 @@ void fluidsim::AdvectionStep::compute(FluidState& fluidState, float dt)
 			context.dispatchComputeIndirect();
 		};
 
-	context.memoryBarrier(MemoryBarrierType::ShaderImageAccess);
 	advect(fluidState.velocityX, staggeredNoSlipBoundaryCondition, xStagger);
 	advect(fluidState.velocityY, staggeredNoSlipBoundaryCondition, yStagger);
 	advect(fluidState.inkDensity, zeroBoundaryCondition, noStagger);
@@ -228,7 +227,8 @@ void fluidsim::DiffusionStep::compute(ShaderProgram& jacobiProgram, FluidState& 
 
 	for (int i = 0; i < jacobiIterations; i++)
 	{
-		context.memoryBarrier(MemoryBarrierType::ShaderImageAccess);
+		if (i > 0)
+			context.memoryBarrier(MemoryBarrierType::ShaderImageAccess);
 		jacobiX.step(jacobiProgram);
 		jacobiY.step(jacobiProgram);
 	}
@@ -272,7 +272,6 @@ void fluidsim::ForcesStep::compute(FluidState& fluidState, const FluidSimMouseCl
 		context.dispatchComputeIndirect();
 	};
 
-	context.memoryBarrier(MemoryBarrierType::ShaderImageAccess);
 	applyForce(fluidState.velocityX.getInput(), impulse.magnitude.x, staggeredNoSlipBoundaryCondition, xStagger);
 	applyForce(fluidState.velocityY.getInput(), impulse.magnitude.y, staggeredNoSlipBoundaryCondition, yStagger);
 	if (!velocityOnly)
@@ -337,7 +336,8 @@ void fluidsim::PressureStep::compute(ShaderProgram& jacobiProgram, FluidState& f
 
 	for (int i = 0; i < jacobiIterations; i++)
 	{
-		context.memoryBarrier(MemoryBarrierType::ShaderImageAccess);
+		if (i > 0)
+			context.memoryBarrier(MemoryBarrierType::ShaderImageAccess);
 		jacobi.step(jacobiProgram);
 	}
 
