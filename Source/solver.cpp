@@ -27,8 +27,15 @@ constexpr int divergenceOutBinding = 2;
 
 constexpr int projectionPressureBinding = 2;
 
+const Empty::math::bvec2 anyStagger(true, true);
+const Empty::math::bvec2 xStagger(true, false);
+const Empty::math::bvec2 yStagger(false, true);
+const Empty::math::bvec2 noStagger(false, false);
+
 // f(boundary) + f(neighbour) = 0 -> f(boundary) = -f(neighbour)
 constexpr float noSlipBoundaryCondition = -1.f;
+// On a staggered grid, we store boundary values directly.
+constexpr float staggeredNoSlipBoundaryCondition = 0.f;
 // f(boundary) - f(neighbour) = 0 -> f(boundary) = f(neighbour)
 constexpr float neumannBoundaryCondition = 1.f;
 // f(boundary) = 0
@@ -55,10 +62,11 @@ void fluidsim::AdvectionStep::compute(FluidState& fluidState, float dt)
 
 	auto& params = fluidState.parameters;
 
-	advectionProgram.uniform("udx", params.gridCellSize);
+	advectionProgram.uniform("uGridParams.dx", params.gridCellSize);
+	advectionProgram.uniform("uGridParams.oneOverDx", 1.f / params.gridCellSize);
 	{
-		Empty::math::vec2 data(1.f / (params.gridSize.x * params.gridCellSize), 1.f / (params.gridSize.y * params.gridCellSize));
-		advectionProgram.uniform("uOneOverGridSizeTimesDx", data);
+		Empty::math::vec2 data(1.f / params.gridSize.x, 1.f / params.gridSize.y);
+		advectionProgram.uniform("uGridParams.oneOverGridSize", data);
 	}
 	advectionProgram.uniform("udt", dt);
 
@@ -66,15 +74,15 @@ void fluidsim::AdvectionStep::compute(FluidState& fluidState, float dt)
 
 	auto& velocityXTex = fluidState.velocityX.getInput();
 	advectionProgram.registerTexture("uVelocityX", velocityXTex, false);
-	context.bind(velocityXTex.getLevel(0), allVelocityXBinding, AccessPolicy::ReadOnly, GPUScalarField::Format);
+	context.bind(velocityXTex, allVelocityXBinding);
 
 	auto& velocityYTex = fluidState.velocityY.getInput();
 	advectionProgram.registerTexture("uVelocityY", velocityYTex, false);
-	context.bind(velocityYTex.getLevel(0), allVelocityYBinding, AccessPolicy::ReadOnly, GPUScalarField::Format);
+	context.bind(velocityYTex, allVelocityYBinding);
 
 	context.setShaderProgram(advectionProgram);
 
-	auto advect = [this, &context](BufferedScalarField& field, float boundaryCondition)
+	auto advect = [this, &context](BufferedScalarField& field, float boundaryCondition, Empty::math::bvec2 stagger)
 		{
 			auto& fieldIn = field.getInput();
 			advectionProgram.registerTexture("uFieldIn", fieldIn, false);
@@ -85,14 +93,15 @@ void fluidsim::AdvectionStep::compute(FluidState& fluidState, float dt)
 			context.bind(fieldOut.getLevel(0), advectionFieldOutBinding, AccessPolicy::WriteOnly, GPUScalarField::Format);
 
 			advectionProgram.uniform("uBoundaryCondition", boundaryCondition);
+			advectionProgram.uniform("uFieldStagger", stagger);
 
 			context.dispatchComputeIndirect();
 		};
 
 	context.memoryBarrier(MemoryBarrierType::ShaderImageAccess);
-	advect(fluidState.velocityX, noSlipBoundaryCondition);
-	advect(fluidState.velocityY, noSlipBoundaryCondition);
-	advect(fluidState.inkDensity, zeroBoundaryCondition);
+	advect(fluidState.velocityX, staggeredNoSlipBoundaryCondition, xStagger);
+	advect(fluidState.velocityY, staggeredNoSlipBoundaryCondition, yStagger);
+	advect(fluidState.inkDensity, zeroBoundaryCondition, noStagger);
 
 	fluidState.velocityX.swap();
 	fluidState.velocityY.swap();
@@ -208,7 +217,11 @@ void fluidsim::DiffusionStep::compute(ShaderProgram& jacobiProgram, FluidState& 
 		float oneOverBeta = 1.f / (alpha + 4.f);
 		jacobiProgram.uniform("uAlpha", alpha);
 		jacobiProgram.uniform("uOneOverBeta", oneOverBeta);
-		jacobiProgram.uniform("uBoundaryCondition", noSlipBoundaryCondition);
+		jacobiProgram.uniform("uBoundaryCondition", staggeredNoSlipBoundaryCondition);
+		// The exact stagger doesn't matter since source and destination always have the same one.
+		// The entry point shader just has to know that it is staggered to properly enforce
+		// boundary conditions.
+		jacobiProgram.uniform("uFieldStagger", anyStagger);
 	}
 
 	context.setShaderProgram(jacobiProgram);
@@ -248,20 +261,22 @@ void fluidsim::ForcesStep::compute(FluidState& fluidState, const FluidSimMouseCl
 
 	context.setShaderProgram(forcesProgram);
 
-	auto applyForce = [this, &context](GPUScalarField& field, float forceMagnitude, float boundaryCondition)
+	auto applyForce = [this, &context](GPUScalarField& field, float forceMagnitude, float boundaryCondition, Empty::math::bvec2 stagger)
 	{
 		forcesProgram.registerTexture("uField", field, false);
 		context.bind(field.getLevel(0), forcesFieldBinding, AccessPolicy::ReadWrite, GPUScalarField::Format);
 
 		forcesProgram.uniform("uForceMagnitude", forceMagnitude);
 		forcesProgram.uniform("uBoundaryCondition", boundaryCondition);
+		forcesProgram.uniform("uFieldStagger", stagger);
 		context.dispatchComputeIndirect();
 	};
 
 	context.memoryBarrier(MemoryBarrierType::ShaderImageAccess);
-	applyForce(fluidState.velocityX.getInput(), impulse.magnitude.x, noSlipBoundaryCondition);
-	applyForce(fluidState.velocityY.getInput(), impulse.magnitude.y, noSlipBoundaryCondition);
-	applyForce(fluidState.inkDensity.getInput(), impulse.inkAmount * dt, zeroBoundaryCondition);
+	applyForce(fluidState.velocityX.getInput(), impulse.magnitude.x, staggeredNoSlipBoundaryCondition, xStagger);
+	applyForce(fluidState.velocityY.getInput(), impulse.magnitude.y, staggeredNoSlipBoundaryCondition, yStagger);
+	if (!velocityOnly)
+		applyForce(fluidState.inkDensity.getInput(), impulse.inkAmount * dt, zeroBoundaryCondition, noStagger);
 
 	// Don't swap textures since we read from and write to the same textures
 }
@@ -285,7 +300,7 @@ void fluidsim::DivergenceStep::compute(FluidState& fluidState)
 	divergenceProgram.uniform("uHalfOneOverDx", 1.f / (2.f * params.gridCellSize));
 	divergenceProgram.registerTexture("uVelocityX", velocityXTex, false);
 	divergenceProgram.registerTexture("uVelocityY", velocityYTex, false);
-	divergenceProgram.registerTexture("uFieldOut", fluidState.divergenceTex, false);
+	divergenceProgram.registerTexture("uDivergence", fluidState.divergenceTex, false);
 	context.bind(velocityXTex.getLevel(0), allVelocityXBinding, AccessPolicy::ReadOnly, GPUScalarField::Format);
 	context.bind(velocityYTex.getLevel(0), allVelocityYBinding, AccessPolicy::ReadOnly, GPUScalarField::Format);
 	context.bind(fluidState.divergenceTex.getLevel(0), divergenceOutBinding, AccessPolicy::WriteOnly, GPUScalarField::Format);
@@ -315,6 +330,7 @@ void fluidsim::PressureStep::compute(ShaderProgram& jacobiProgram, FluidState& f
 		jacobiProgram.uniform("uAlpha", alpha);
 		jacobiProgram.uniform("uOneOverBeta", oneOverBeta);
 		jacobiProgram.uniform("uBoundaryCondition", neumannBoundaryCondition);
+		jacobiProgram.uniform("uFieldStagger", noStagger);
 	}
 
 	context.setShaderProgram(jacobiProgram);
@@ -352,6 +368,10 @@ void fluidsim::ProjectionStep::compute(FluidState& fluidState)
 	projectionProgram.registerTexture("uVelocityX", velocityXTex, false);
 	projectionProgram.registerTexture("uVelocityY", velocityYTex, false);
 	projectionProgram.registerTexture("uPressure", pressureTex, false);
+	// The exact stagger doesn't matter since the program is not generic and knows
+	// exactly how to perform its task. The entry point shader just has to know that
+	// its input fields are staggered to properly enforce boundary conditions.
+	projectionProgram.uniform("uFieldStagger", anyStagger);
 	context.bind(velocityXTex.getLevel(0), allVelocityXBinding, AccessPolicy::ReadWrite, GPUScalarField::Format);
 	context.bind(velocityYTex.getLevel(0), allVelocityYBinding, AccessPolicy::ReadWrite, GPUScalarField::Format);
 	context.bind(pressureTex.getLevel(0), projectionPressureBinding, AccessPolicy::ReadOnly, GPUScalarField::Format);
