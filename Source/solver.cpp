@@ -66,11 +66,11 @@ void fluidsim::AdvectionStep::compute(FluidState& fluidState, float dt)
 
 	auto& velocityXTex = fluidState.velocityX.getInput();
 	advectionProgram.registerTexture("uVelocityX", velocityXTex, false);
-	context.bind(velocityXTex, allVelocityXBinding);
+	context.bind(velocityXTex.getLevel(0), allVelocityXBinding, AccessPolicy::ReadOnly, GPUScalarField::Format);
 
 	auto& velocityYTex = fluidState.velocityY.getInput();
 	advectionProgram.registerTexture("uVelocityY", velocityYTex, false);
-	context.bind(velocityYTex, allVelocityYBinding);
+	context.bind(velocityYTex.getLevel(0), allVelocityYBinding, AccessPolicy::ReadOnly, GPUScalarField::Format);
 
 	context.setShaderProgram(advectionProgram);
 
