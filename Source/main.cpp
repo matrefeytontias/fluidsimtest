@@ -32,8 +32,10 @@ TextureInfo selectDebugTexture(FluidState& fluidState, int whichDebugTexture)
 	case 1:
 		return fluidState.velocityY.getInput();
 	case 2:
-		return fluidState.pressure.getInput();
+		return fluidState.velocityZ.getInput();
 	case 3:
+		return fluidState.pressure.getInput();
+	case 4:
 		return fluidState.divergenceTex;
 	default:
 		FATAL("invalid requested debug texture");
@@ -65,14 +67,14 @@ int main(int argc, char* argv[])
 	context.debugMessageCallback(debugCallback, nullptr);
 
 	// Fluid setup
-	FluidState fluidState(Empty::math::uvec2(256, 256), 0.8f, 1.f, 0.0025f);
-	FluidRenderParameters fluidRenderParameters{ Empty::math::uvec2(context.frameWidth, context.frameHeight), fluidState.parameters.gridSize, 4.f };
+	FluidState fluidState(Empty::math::uvec3(64, 64, 64), 0.8f, 1.f, 0.0025f);
+	FluidRenderParameters fluidRenderParameters{ Empty::math::vec3::zero, fluidState.parameters.gridSize, 0.5f };
 	FluidSim fluidSim(fluidState.parameters.gridSize);
 
 	double then = glfwGetTime();
 	Empty::math::vec2 mouseThen = ImGui::GetMousePos();
 
-	FluidSimMouseClickImpulse impulse;
+	FluidSimImpulse impulse;
 	impulse.radius = 40.f;
 	impulse.inkAmount = 20.f;
 	float forceScale = 5.f;
@@ -86,6 +88,8 @@ int main(int argc, char* argv[])
 	int whichDebugTexture = 0;
 	int whenDebugTexture = 0;
 	float colorScale = 1.f;
+	Empty::math::vec4 debugRect(10, 10, 200, 200);
+	int debugTextureSlice = 0;
 
 	// Debug texture draw
 	VertexArray debugVAO("Debug VAO");
@@ -94,8 +98,10 @@ int main(int argc, char* argv[])
 	debugDrawProgram.attachFile(ShaderType::Vertex, "shaders/debug/vertex.glsl", "Debug draw vertex");
 	debugDrawProgram.attachFile(ShaderType::Fragment, "shaders/debug/fragment.glsl", "Debug draw fragment");
 	debugDrawProgram.build();
-	debugDrawProgram.uniform("uTextureSizeOverScreenSize", Empty::math::vec2(fluidState.parameters.gridSize) * fluidRenderParameters.gridCellSizeInPx / Empty::math::vec2(context.frameWidth, context.frameHeight));
+	debugDrawProgram.uniform("uRect", debugRect);
+	debugDrawProgram.uniform("uOneOverScreenSize", Empty::math::vec2(1.f / context.frameWidth, 1.f / context.frameHeight));
 	debugDrawProgram.uniform("uColorScale", colorScale);
+	debugDrawProgram.uniform("uUVZ", 0.f);
 
 	auto debugTextureLambda = [&displayDebugTexture, &debugDrawProgram, &whichDebugTexture](FluidState& fluidState, float dt)
 		{
@@ -153,7 +159,9 @@ int main(int argc, char* argv[])
 			ImGui::Separator();
 			ImGui::TextDisabled("Debug texture display");
 			ImGui::Checkbox("Display debug texture", &displayDebugTexture);
-			ImGui::Combo("Display which", &whichDebugTexture, "Velocity X\0Velocity Y\0Pressure\0Velocity divergence\0");
+			if (ImGui::SliderInt("Debug texture Z slice", &debugTextureSlice, 0, fluidState.parameters.gridSize.z - 1))
+				debugDrawProgram.uniform("uUVZ", (debugTextureSlice + 0.5f) / fluidState.parameters.gridSize.z);
+			ImGui::Combo("Display which", &whichDebugTexture, "Velocity X\0Velocity Y\0Velocity Z\0Pressure\0Velocity divergence\0");
 			if (ImGui::Combo("Display when", &whenDebugTexture, "Start of frame\0After advection\0After diffusion\0After divergence\0After pressure computation\0After projection\0\0"))
 				fluidSim.modifyHookStage(debugTextureLambdaHookId, static_cast<FluidSimHookStage>(whenDebugTexture));
 
@@ -162,25 +170,27 @@ int main(int argc, char* argv[])
 		}
 		ImGui::End();
 
-		/// Advance simulation
+		/// Simulation steps
 
+		// Apply an impulse and inject ink when the left mouse button is down,
+		// or no ink if the right mouse button is down
+		bool rightMouseDown = ImGui::IsMouseDown(ImGuiMouseButton_Right);
+		if (!ImGui::GetIO().WantCaptureMouse && (ImGui::IsMouseDown(ImGuiMouseButton_Left) || rightMouseDown))
+		{
+			impulse.magnitude.xy() = (mouseNow - mouseThen) * forceScale;
+			impulse.magnitude.z = 0.f;
+			impulse.magnitude.y *= -1;
+			impulse.position.xy() = (mouseNow - debugRect.xy()) * Empty::math::vec2(fluidState.parameters.gridSize.xy()) / debugRect.zw();
+			impulse.position.z = debugTextureSlice + 0.5f;
+			impulse.position.y = fluidState.parameters.gridSize.y - impulse.position.y;
+
+			context.memoryBarrier(MemoryBarrierType::ShaderImageAccess);
+			fluidSim.applyForces(fluidState, impulse, rightMouseDown, dt);
+		}
+
+		// Advance simulation
 		if (!pauseSimulation || runOneStep)
 		{
-			// Apply an impulse and inject ink when the left mouse button is down,
-			// or no ink if the right mouse button is down
-			bool rightMouseDown = ImGui::IsMouseDown(ImGuiMouseButton_Right);
-			if (!ImGui::GetIO().WantCaptureMouse && (ImGui::IsMouseDown(ImGuiMouseButton_Left) || rightMouseDown))
-			{
-				impulse.magnitude = (mouseNow - mouseThen) * forceScale;
-				impulse.magnitude.y *= -1;
-				impulse.position = mouseNow - fluidRenderParameters.topLeftCorner;
-				impulse.position /= fluidRenderParameters.gridCellSizeInPx;
-				impulse.position.y = fluidState.parameters.gridSize.y - impulse.position.y;
-
-				context.memoryBarrier(MemoryBarrierType::ShaderImageAccess);
-				fluidSim.applyForces(fluidState, impulse, rightMouseDown, dt);
-			}
-
 			fluidSim.advance(fluidState, dt);
 
 			runOneStep = false;
@@ -196,8 +206,8 @@ int main(int argc, char* argv[])
 		{
 			auto* drawList = ImGui::GetBackgroundDrawList();
 
-			drawList->AddRect(fluidRenderParameters.topLeftCorner - Empty::math::vec2(1, 1),
-				fluidRenderParameters.topLeftCorner + Empty::math::vec2(fluidState.parameters.gridSize) * fluidRenderParameters.gridCellSizeInPx + Empty::math::vec2(2, 2),
+			drawList->AddRect(debugRect.xy() - Empty::math::vec2(1, 1),
+				debugRect.xy() + debugRect.zw() + Empty::math::vec2(2, 2),
 				ImColor(0, 255, 0));
 
 			if (!displayDebugTexture)

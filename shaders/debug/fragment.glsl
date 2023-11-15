@@ -1,9 +1,9 @@
 #version 450
 
-uniform sampler2D uTexture;
+uniform sampler3D uTexture;
 uniform float uColorScale;
 
-in vec2 vUV;
+in vec3 vUV;
 out vec4 fFragColor;
 
 void main()

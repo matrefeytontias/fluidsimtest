@@ -8,25 +8,24 @@
 // *****************************************
 
 constexpr Empty::gl::DataFormat gpuScalarDataFormat = Empty::gl::DataFormat::Red;
-constexpr Empty::gl::DataFormat gpuVectorDataFormat = Empty::gl::DataFormat::RG;
-using GPUScalarField = Empty::gl::Texture<Empty::gl::TextureTarget::Texture2D, Empty::gl::TextureFormat::Red32f>;
-using GPUVectorField = Empty::gl::Texture<Empty::gl::TextureTarget::Texture2D, Empty::gl::TextureFormat::RG32f>;
+using GPUScalarField = Empty::gl::Texture<Empty::gl::TextureTarget::Texture3D, Empty::gl::TextureFormat::Red32f>;
 
 template <typename F, Empty::gl::DataFormat Format>
 struct BufferedField
 {
 	using Field = F;
 
-	BufferedField(const std::string& name, Empty::math::uvec2 size) :
+	BufferedField(const std::string& name, Empty::math::uvec3 size) :
 		fields{ { name + " 1" } , { name + " 2"} },
 		writingBackBuffer(true)
 	{
 		for (int i : { 0, 1 })
 		{
-			fields[i].setStorage(1, size.x, size.y);
+			fields[i].setStorage(1, size.x, size.y, size.z);
 			fields[i].template clearLevel<Format, DataType::Float>(0);
 			fields[i].setParameter<TextureParam::WrapS>(TextureParamValue::ClampToEdge);
 			fields[i].setParameter<TextureParam::WrapT>(TextureParamValue::ClampToEdge);
+			fields[i].setParameter<TextureParam::WrapR>(TextureParamValue::ClampToEdge);
 		}
 	}
 
@@ -48,4 +47,3 @@ private:
 };
 
 using BufferedScalarField = BufferedField<GPUScalarField, gpuScalarDataFormat>;
-using BufferedVectorField = BufferedField<GPUVectorField, gpuVectorDataFormat>;

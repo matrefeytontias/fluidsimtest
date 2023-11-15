@@ -29,10 +29,9 @@ namespace fluidsim
 	
 	struct JacobiIterator
 	{
-		JacobiIterator(const std::string& label, Empty::math::uvec2 gridSize);
+		JacobiIterator(const std::string& label, Empty::math::uvec3 gridSize);
 
-		void init(GPUScalarField& fieldSource, BufferedScalarField& field,
-			int fieldSourceBinding, int fieldInBinding, int workingFieldBinding, int fieldOutBinding, int jacobiIterations);
+		void init(GPUScalarField& fieldSource, BufferedScalarField& field, int jacobiIterations);
 		// Expects all parameters except textures to be set in the jacobi program, and it to be active.
 		void step(Empty::gl::ShaderProgram& jacobiProgram);
 		void reset();
@@ -42,33 +41,30 @@ namespace fluidsim
 
 		GPUScalarField* _fieldSource;
 		BufferedScalarField* _field;
-		int _fieldSourceBinding;
-		int _fieldInBinding;
-		int _workingFieldBinding;
-		int _fieldOutBinding;
 
 		int _numIterations;
 		int _currentIteration;
 		bool _writeToWorkingField;
-		int _iterationFieldInBinding;
-		int _iterationFieldOutBinding;
+		Empty::gl::TextureLevelInfo _iterationFieldIn;
+		Empty::gl::TextureLevelInfo _iterationFieldOut;
 	};
 
 	struct DiffusionStep
 	{
-		DiffusionStep(Empty::math::uvec2 gridSize);
+		DiffusionStep(Empty::math::uvec3 gridSize);
 
 		void compute(Empty::gl::ShaderProgram& jacobiProgram, FluidState& fluidState, float dt, int jacobiIterations);
 
 		JacobiIterator jacobiX;
 		JacobiIterator jacobiY;
+		JacobiIterator jacobiZ;
 	};
 
 	struct ForcesStep
 	{
 		ForcesStep(Empty::gl::Shader& entryPointShader);
 
-		void compute(FluidState& fluidState, const FluidSimMouseClickImpulse& impulse, float dt, bool velocityOnly);
+		void compute(FluidState& fluidState, const FluidSimImpulse& impulse, float dt, bool velocityOnly);
 
 		Empty::gl::ShaderProgram forcesProgram;
 	};
@@ -84,7 +80,7 @@ namespace fluidsim
 
 	struct PressureStep
 	{
-		PressureStep(Empty::math::uvec2 gridSize);
+		PressureStep(Empty::math::uvec3 gridSize);
 
 		void compute(Empty::gl::ShaderProgram& jacobiProgram, FluidState& fluidState, int jacobiIterations);
 
@@ -118,13 +114,13 @@ using FluidSimHookId = uint64_t;
 
 struct FluidSim
 {
-	FluidSim(Empty::math::uvec2 gridSize);
+	FluidSim(Empty::math::uvec3 gridSize);
 
 	FluidSimHookId registerHook(FluidSimHook hook, FluidSimHookStage when);
 	bool modifyHookStage(FluidSimHookId, FluidSimHookStage newWhen);
 	void unregisterHook(FluidSimHookId);
 
-	void applyForces(FluidState& fluidState, FluidSimMouseClickImpulse& impulse, bool velocityOnly, float dt);
+	void applyForces(FluidState& fluidState, FluidSimImpulse& impulse, bool velocityOnly, float dt);
 	void advance(FluidState& fluidState, float dt);
 
 	int diffusionJacobiSteps;

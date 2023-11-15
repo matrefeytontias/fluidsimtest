@@ -36,6 +36,7 @@ set(RESOURCES
     shaders/debug/vertex.glsl
     shaders/debug/fragment.glsl)
 target_sources(FluidSimTest PRIVATE ${RESOURCES})
+source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR}/shaders PREFIX Shaders FILES ${RESOURCES})
 
 foreach(RES ${RESOURCES})
     add_custom_command(

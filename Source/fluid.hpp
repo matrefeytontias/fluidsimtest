@@ -10,49 +10,53 @@
 
 struct FluidSimParameters
 {
-	const Empty::math::uvec2 gridSize;
+	const Empty::math::uvec3 gridSize;
 	float gridCellSize;
 	float density;
 	float viscosity;
 };
 
-struct FluidSimMouseClickImpulse
+struct FluidSimImpulse
 {
-	Empty::math::vec2 position;
-	Empty::math::vec2 magnitude;
+	Empty::math::vec3 position;
+	Empty::math::vec3 magnitude;
 	float inkAmount;
 	float radius;
 };
 
 struct FluidRenderParameters
 {
-	FluidRenderParameters(Empty::math::uvec2 frame, Empty::math::uvec2 gridSize, float gridCellSizeInPx)
+	FluidRenderParameters(Empty::math::vec3 center, Empty::math::uvec3 gridSize, float gridCellSizeInUnits)
 	{
-		topLeftCorner = (Empty::math::vec2(frame) - Empty::math::vec2(gridSize) * gridCellSizeInPx) / 2.f;
-		this->gridCellSizeInPx = gridCellSizeInPx;
+		centerPosition = center;
+		topLeftCorner = center - Empty::math::vec3(gridSize) * gridCellSizeInUnits / 2.f;
+		this->gridCellSizeInUnits = gridCellSizeInUnits;
 	}
 
-	Empty::math::vec2 topLeftCorner;
-	float gridCellSizeInPx;
+	Empty::math::vec3 centerPosition;
+	Empty::math::vec3 topLeftCorner;
+	float gridCellSizeInUnits;
 };
 
 struct FluidState
 {
-	FluidState(Empty::math::uvec2 gridSize, float gridCellSize, float density, float viscosity) :
+	FluidState(Empty::math::uvec3 gridSize, float gridCellSize, float density, float viscosity) :
 		parameters{ gridSize, gridCellSize, density, viscosity },
 		velocityX{ "Velocity X", gridSize },
 		velocityY{ "Velocity Y", gridSize },
+		velocityZ{ "Velocity Z", gridSize },
 		pressure{ "Pressure", gridSize },
 		divergenceTex("Divergence"),
 		inkDensity{ "Ink density", gridSize }
 	{
-		divergenceTex.setStorage(1, gridSize.x, gridSize.y);
+		divergenceTex.setStorage(1, gridSize.x, gridSize.y, gridSize.z);
 	}
 
 	void reset()
 	{
 		velocityX.clear();
 		velocityY.clear();
+		velocityZ.clear();
 		pressure.clear();
 		divergenceTex.template clearLevel<Empty::gl::DataFormat::Red, Empty::gl::DataType::Float>(0);
 		inkDensity.clear();
@@ -63,6 +67,7 @@ struct FluidState
 	// Fields we need
 	BufferedScalarField velocityX;
 	BufferedScalarField velocityY;
+	BufferedScalarField velocityZ;
 	BufferedScalarField pressure;
 	GPUScalarField divergenceTex;
 
