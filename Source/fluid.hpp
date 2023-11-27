@@ -24,20 +24,6 @@ struct FluidSimImpulse
 	float radius;
 };
 
-struct FluidRenderParameters
-{
-	FluidRenderParameters(Empty::math::vec3 center, Empty::math::uvec3 gridSize, float gridCellSizeInUnits)
-	{
-		centerPosition = center;
-		topLeftCorner = center - Empty::math::vec3(gridSize) * gridCellSizeInUnits / 2.f;
-		this->gridCellSizeInUnits = gridCellSizeInUnits;
-	}
-
-	Empty::math::vec3 centerPosition;
-	Empty::math::vec3 topLeftCorner;
-	float gridCellSizeInUnits;
-};
-
 struct FluidState
 {
 	FluidState(Empty::math::uvec3 gridSize, float gridCellSize, float density, float viscosity) :

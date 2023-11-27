@@ -115,7 +115,6 @@ private:
 
     static void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods)
     {
-        Context& context = Context::get();
         ImGui_ImplGlfw_KeyCallback(window, key, scancode, action, mods);
     };
 

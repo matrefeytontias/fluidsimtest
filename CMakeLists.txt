@@ -11,8 +11,11 @@ project(FluidSim DESCRIPTION "Fluid simulation playground" LANGUAGES C CXX)
 set(SOURCES
     Source/main.cpp
     Source/Context.h
+    Source/Camera.h
     Source/fields.hpp
     Source/fluid.hpp
+    Source/render.hpp
+    Source/render.cpp
     Source/solver.hpp
     Source/solver.cpp)
 
@@ -26,15 +29,19 @@ set_property(DIRECTORY PROPERTY VS_STARTUP_PROJECT FluidSimTest)
 
 set(RESOURCES
     # Fluid sim shaders
-    shaders/entry_point.glsl
-    shaders/advection.glsl
-    shaders/divergence.glsl
-    shaders/forces.glsl
-    shaders/jacobi.glsl
-    shaders/projection.glsl
-    # Debug shaders
-    shaders/debug/vertex.glsl
-    shaders/debug/fragment.glsl)
+    shaders/sim/entry_point.glsl
+    shaders/sim/advection.glsl
+    shaders/sim/divergence.glsl
+    shaders/sim/forces.glsl
+    shaders/sim/jacobi.glsl
+    shaders/sim/projection.glsl
+    # Drawing shaders
+    shaders/draw/debug_vertex.glsl
+    shaders/draw/debug_fragment.glsl
+    shaders/draw/fluid_vertex.glsl
+    shaders/draw/fluid_fragment.glsl
+    shaders/draw/grid_vertex.glsl
+    shaders/draw/grid_fragment.glsl)
 target_sources(FluidSimTest PRIVATE ${RESOURCES})
 source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR}/shaders PREFIX Shaders FILES ${RESOURCES})
 
