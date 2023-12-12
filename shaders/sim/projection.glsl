@@ -14,7 +14,7 @@ layout(binding = 3, r32f) uniform restrict readonly image3D uPressure;
 void compute(ivec3 texel, ivec3 outputTexel, bool boundaryTexel)
 {
 	// Velocity X, Y and Z texels are in different locations, so they each need a
-	// coordinate from a different gradient, which each happen to share a texel.
+	// coordinate from different gradients, which happen to share a texel.
 
 	float pleft = imageLoad(uPressure, texel + ivec3(-1,  0,  0)).r,
 		 pright = imageLoad(uPressure, texel                    ).r,

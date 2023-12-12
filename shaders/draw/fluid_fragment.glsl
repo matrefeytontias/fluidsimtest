@@ -1,6 +1,6 @@
 #version 450
 
-#define RAY_SAMPLES 90
+#define RAY_SAMPLES 128
 
 uniform mat4 uCameraToFluidSim;
 uniform sampler3D uInkDensity;
@@ -46,13 +46,15 @@ void main()
 
     float density = 0.;
     vec3 rayStep = (rayEnd - intersectionStart) / RAY_SAMPLES;
+    float weight = length(rayStep);
+    float weightsSum = distance(rayEnd, intersectionStart);
     vec3 rayPosition = intersectionStart;
 
     for (int i = 0; i < RAY_SAMPLES; i++)
     {
-        density += sampleFluid(rayPosition);
+        density += sampleFluid(rayPosition) * weight;
         rayPosition += rayStep;
     }
 
-    fFragColor = vec4(uInkColor * (uInkMultiplier * density), 1.);
+    fFragColor = vec4(uInkColor * (uInkMultiplier * density / weightsSum), 1.);
 }
