@@ -8,9 +8,7 @@
 // *****************************************
 
 constexpr Empty::gl::DataFormat gpuScalarDataFormat = Empty::gl::DataFormat::Red;
-constexpr Empty::gl::DataFormat gpuVectorDataFormat = Empty::gl::DataFormat::RG;
 using GPUScalarField = Empty::gl::Texture<Empty::gl::TextureTarget::Texture2D, Empty::gl::TextureFormat::Red32f>;
-using GPUVectorField = Empty::gl::Texture<Empty::gl::TextureTarget::Texture2D, Empty::gl::TextureFormat::RG32f>;
 
 template <typename F, Empty::gl::DataFormat Format>
 struct BufferedField
@@ -48,4 +46,3 @@ private:
 };
 
 using BufferedScalarField = BufferedField<GPUScalarField, gpuScalarDataFormat>;
-using BufferedVectorField = BufferedField<GPUVectorField, gpuVectorDataFormat>;
