@@ -31,17 +31,70 @@ vec2 gridSpaceToUV(vec2 p, vec2 stagger)
 	return (p * uGridParams.oneOverDx + stagger) * uGridParams.oneOverGridSize;
 }
 
+vec2 bilerpVelocity(vec2 position)
+{
+	vec2 velocity;
+	velocity.x = texture(uVelocityX, gridSpaceToUV(position, velocityStagger.xy)).r;
+	velocity.y = texture(uVelocityY, gridSpaceToUV(position, velocityStagger.yx)).r;
+	return velocity;
+}
+
+// Semi-lagrangian advection via 3rd-order Runge-Kutta time integration
+vec2 traceBack(vec2 position)
+{
+	vec2 k1 = bilerpVelocity(position);
+	vec2 k2 = bilerpVelocity(position - udt * 0.5 * k1);
+	vec2 k3 = bilerpVelocity(position - udt * 0.75 * k2);
+
+	return position - (k1 * 2 + k2 * 3 + k3 * 4) * udt / 9.;
+}
+
+// Visual Simulation of Smoke, Ronald Fedkiw, Jos Stam and Henrik Wann Jensen: Proceedings of SIGGRAPH'2001
+// Appendix B Monotonic Cubic Interpolation
+float monotonicCubicInterpolation(float qprev, float q0, float q1, float qnext, float t)
+{
+	float delta = q1 - q0;
+	float d0 = (q1 - qprev) * 0.5;
+	float d1 = (qnext - q0) * 0.5;
+
+	// Enforce monotonicity
+	d0 = sign(delta) != sign(d0) ? 0. : d0;
+	d1 = sign(delta) != sign(d1) ? 0. : d1;
+
+	float a0 = q0;
+	float a1 = d0;
+	float a2 = delta * 3 - d0 * 2 - d1;
+	float a3 = d0 + d1 - delta;
+
+	return ((a3 * t + a2) * t + a1) * t + a0;
+}
+
+// Monotonic bicubic interpolation
+float interpolateField(vec2 uv)
+{
+	vec2 texelOffset = uGridParams.oneOverGridSize;
+
+	// Interpolate along X then Y
+	vec4 topLeftBlock = textureGather(uFieldIn, texelOffset * vec2(-1, 1) + uv);
+	vec4 topRightBlock = textureGather(uFieldIn, texelOffset + uv);
+	vec4 bottomLeftBlock = textureGather(uFieldIn, -texelOffset + uv);
+	vec4 bottomRightBlock = textureGather(uFieldIn, texelOffset * vec2(1, -1) + uv);
+
+	vec2 t = fract(uv * textureSize(uFieldIn, 0).xy - 0.5);
+
+	float q0 = monotonicCubicInterpolation(topLeftBlock.x, topLeftBlock.y, topRightBlock.x, topRightBlock.y, t.x);
+	float q1 = monotonicCubicInterpolation(topLeftBlock.w, topLeftBlock.z, topRightBlock.w, topRightBlock.z, t.x);
+	float q2 = monotonicCubicInterpolation(bottomLeftBlock.x, bottomLeftBlock.y, bottomRightBlock.x, bottomRightBlock.y, t.x);
+	float q3 = monotonicCubicInterpolation(bottomLeftBlock.w, bottomLeftBlock.z, bottomRightBlock.w, bottomRightBlock.z, t.x);
+
+	return monotonicCubicInterpolation(q0, q1, q2, q3, t.y);
+}
+
 void compute(ivec2 texel, ivec2 outputTexel, bool boundaryTexel)
 {
 	vec2 fieldStagger = ivec2(uFieldStagger) * 0.5;
 	vec2 samplePosition = texelSpaceToGridSpace(texel, fieldStagger);
+	float newValue = interpolateField(gridSpaceToUV(traceBack(samplePosition), fieldStagger));
 
-	vec2 velocity;
-	velocity.x = texture(uVelocityX, gridSpaceToUV(samplePosition, velocityStagger.xy)).r;
-	velocity.y = texture(uVelocityY, gridSpaceToUV(samplePosition, velocityStagger.yx)).r;
-
-	vec2 lastPosition = samplePosition - velocity * udt;
-	vec2 uv = gridSpaceToUV(lastPosition, fieldStagger);
-	float newValue = texture(uFieldIn, uv).r;
 	imageStore(uFieldOut, outputTexel, vec4(boundaryTexel ? uBoundaryCondition * newValue : newValue));
 }

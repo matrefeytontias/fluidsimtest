@@ -18,7 +18,7 @@ void main()
 	// Staggered fields' bottom and right boundary is at x or
 	// y == 1 rather than 0 to match the physical location of
 	// the boundary on centered fields.
-	bvec2 bBottomLeft = lessThanEqual(texel, ivec2(any(uFieldStagger))), bTopRight = equal(texel, size - 1);
+	bvec2 bBottomLeft = lessThanEqual(texel, ivec2(uFieldStagger)), bTopRight = equal(texel, size - 1);
 	bool isBoundaryTexel = any(bBottomLeft) || any(bTopRight);
 	ivec2 boundaryOffset = ivec2(bBottomLeft) - ivec2(bTopRight);
 
