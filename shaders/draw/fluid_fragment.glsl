@@ -56,5 +56,5 @@ void main()
         rayPosition += rayStep;
     }
 
-    fFragColor = vec4(uInkColor * (uInkMultiplier * density / weightsSum), 1.);
+    fFragColor = vec4(uInkColor, uInkMultiplier * density / weightsSum);
 }

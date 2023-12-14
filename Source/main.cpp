@@ -80,6 +80,9 @@ int main(int argc, char* argv[])
 	context.debugMessageControl(DebugMessageSource::DontCare, DebugMessageType::Error, DebugMessageSeverity::DontCare, true);
 	context.debugMessageCallback(debugCallback, nullptr);
 
+	context.enable(ContextCapability::Blend);
+	context.blendFunction(BlendFunction::SourceAlpha, BlendFunction::OneMinusSourceAlpha);
+
 	// Fluid setup
 	FluidState fluidState(Empty::math::uvec3(64, 64, 64), 0.8f, 1.f, 0.0025f);
 	FluidSim fluidSim(fluidState.parameters.gridSize);
@@ -175,8 +178,10 @@ int main(int argc, char* argv[])
 			ImGui::SliderFloat("Density (kg/dm^3)", &fluidState.parameters.density, 0.0001f, 1.f);
 			ImGui::SliderFloat("Kinematic viscosity (m^2/s)", &fluidState.parameters.viscosity, 0.f, 0.005f, "%.5f");
 			ImGui::Separator();
+			ImGui::TextDisabled("Fluid rendering options");
+			ImGui::DragFloat("In-world sim cell size", &fluidRenderParameters.gridCellSizeInUnits, 0.001f);
 			ImGui::ColorEdit3("Ink color", fluidRenderParameters.inkColor);
-			ImGui::DragFloat("Ink color scale", &fluidRenderParameters.inkMultiplier, 0.01f, 0.0f, 1.f);
+			ImGui::DragFloat("Ink color scale", &fluidRenderParameters.inkMultiplier, 0.01f, 0.0f, 5.f);
 			ImGui::Separator();
 			ImGui::TextDisabled("Mouse click impulse parameters");
 			ImGui::DragFloat("Force scale", &forceScale, 0.1f, 0.f, 20.f);

@@ -11,93 +11,6 @@
 #include "fields.hpp"
 #include "fluid.hpp"
 
-// ****************************************
-// Steps comprising a fluid simulation step
-// ****************************************
-
-namespace fluidsim
-{
-
-	struct AdvectionStep
-	{
-		AdvectionStep(Empty::gl::Shader& entryPointShader);
-
-		void compute(FluidState& fluidState, float dt);
-
-		Empty::gl::ShaderProgram advectionProgram;
-	};
-	
-	struct JacobiIterator
-	{
-		JacobiIterator(const std::string& label, Empty::math::uvec3 gridSize);
-
-		void init(GPUScalarField& fieldSource, BufferedScalarField& field, int jacobiIterations);
-		// Expects all parameters except textures to be set in the jacobi program, and it to be active.
-		void step(Empty::gl::ShaderProgram& jacobiProgram);
-		void reset();
-
-	private:
-		GPUScalarField _workingField;
-
-		GPUScalarField* _fieldSource;
-		BufferedScalarField* _field;
-
-		int _numIterations;
-		int _currentIteration;
-		bool _writeToWorkingField;
-		Empty::gl::TextureLevelInfo _iterationFieldIn;
-		Empty::gl::TextureLevelInfo _iterationFieldOut;
-	};
-
-	struct DiffusionStep
-	{
-		DiffusionStep(Empty::math::uvec3 gridSize);
-
-		void compute(Empty::gl::ShaderProgram& jacobiProgram, FluidState& fluidState, float dt, int jacobiIterations);
-
-		JacobiIterator jacobiX;
-		JacobiIterator jacobiY;
-		JacobiIterator jacobiZ;
-	};
-
-	struct ForcesStep
-	{
-		ForcesStep(Empty::gl::Shader& entryPointShader);
-
-		void compute(FluidState& fluidState, const FluidSimImpulse& impulse, float dt, bool velocityOnly);
-
-		Empty::gl::ShaderProgram forcesProgram;
-	};
-
-	struct DivergenceStep
-	{
-		DivergenceStep();
-
-		void compute(FluidState& fluidState);
-
-		Empty::gl::ShaderProgram divergenceProgram;
-	};
-
-	struct PressureStep
-	{
-		PressureStep(Empty::math::uvec3 gridSize);
-
-		void compute(Empty::gl::ShaderProgram& jacobiProgram, FluidState& fluidState, int jacobiIterations);
-
-		JacobiIterator jacobi;
-	};
-
-	struct ProjectionStep
-	{
-		ProjectionStep(Empty::gl::Shader& entryPointShader);
-
-		void compute(FluidState& fluidState);
-
-		Empty::gl::ShaderProgram projectionProgram;
-	};
-
-}
-
 enum struct FluidSimHookStage : int
 {
 	Start,
@@ -115,6 +28,7 @@ using FluidSimHookId = uint64_t;
 struct FluidSim
 {
 	FluidSim(Empty::math::uvec3 gridSize);
+	~FluidSim();
 
 	FluidSimHookId registerHook(FluidSimHook hook, FluidSimHookStage when);
 	bool modifyHookStage(FluidSimHookId, FluidSimHookStage newWhen);
@@ -141,10 +55,17 @@ private:
 
 	Empty::gl::Buffer _entryPointIndirectDispatchBuffer;
 
-	std::unique_ptr<fluidsim::AdvectionStep> _advectionStep;
-	std::unique_ptr<fluidsim::DiffusionStep> _diffusionStep;
-	std::unique_ptr<fluidsim::ForcesStep> _forcesStep;
-	std::unique_ptr<fluidsim::DivergenceStep> _divergenceStep;
-	std::unique_ptr<fluidsim::PressureStep> _pressureStep;
-	std::unique_ptr<fluidsim::ProjectionStep> _projectionStep;
+	struct AdvectionStep;
+	struct DiffusionStep;
+	struct ForcesStep;
+	struct DivergenceStep;
+	struct PressureStep;
+	struct ProjectionStep;
+
+	std::unique_ptr<AdvectionStep> _advectionStep;
+	std::unique_ptr<DiffusionStep> _diffusionStep;
+	std::unique_ptr<ForcesStep> _forcesStep;
+	std::unique_ptr<DivergenceStep> _divergenceStep;
+	std::unique_ptr<PressureStep> _pressureStep;
+	std::unique_ptr<ProjectionStep> _projectionStep;
 };

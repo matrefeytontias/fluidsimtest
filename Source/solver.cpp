@@ -55,332 +55,383 @@ constexpr int entryPointWorkGroupZ = 8;
 // Classes representing fluid simulation steps
 // *******************************************
 
-fluidsim::AdvectionStep::AdvectionStep(Shader& entryPointShader)
-	: advectionProgram("Advection program")
+struct FluidSim::AdvectionStep
 {
-	advectionProgram.attachShader(entryPointShader);
-	advectionProgram.attachFile(ShaderType::Compute, "shaders/sim/advection.glsl", "Advection shader");
-	advectionProgram.build();
-}
-
-void fluidsim::AdvectionStep::compute(FluidState& fluidState, float dt)
-{
-	Context& context = Context::get();
-
-	auto& params = fluidState.parameters;
-
-	advectionProgram.uniform("uGridParams.dx", params.gridCellSize);
-	advectionProgram.uniform("uGridParams.oneOverDx", 1.f / params.gridCellSize);
+	AdvectionStep(Shader& entryPointShader)
+		: advectionProgram("Advection program")
 	{
-		Empty::math::vec3 data(1.f / params.gridSize.x, 1.f / params.gridSize.y, 1.f / params.gridSize.z);
-		advectionProgram.uniform("uGridParams.oneOverGridSize", data);
+		advectionProgram.attachShader(entryPointShader);
+		advectionProgram.attachFile(ShaderType::Compute, "shaders/sim/advection.glsl", "Advection shader");
+		advectionProgram.build();
 	}
-	advectionProgram.uniform("udt", dt);
 
-	// Inputs are exposed with samplers to benefit from bilinear filtering
+	void compute(FluidState& fluidState, float dt)
+	{
+		Context& context = Context::get();
 
-	auto& velocityXTex = fluidState.velocityX.getInput();
-	advectionProgram.registerTexture("uVelocityX", velocityXTex, false);
-	context.bind(velocityXTex, allVelocityXBinding);
+		auto& params = fluidState.parameters;
 
-	auto& velocityYTex = fluidState.velocityY.getInput();
-	advectionProgram.registerTexture("uVelocityY", velocityYTex, false);
-	context.bind(velocityYTex, allVelocityYBinding);
-
-	auto& velocityZTex = fluidState.velocityZ.getInput();
-	advectionProgram.registerTexture("uVelocityZ", velocityZTex, false);
-	context.bind(velocityZTex, allVelocityZBinding);
-
-	context.setShaderProgram(advectionProgram);
-
-	auto advect = [this, &context](BufferedScalarField& field, float boundaryCondition, Empty::math::bvec3 stagger)
+		advectionProgram.uniform("uGridParams.dx", params.gridCellSize);
+		advectionProgram.uniform("uGridParams.oneOverDx", 1.f / params.gridCellSize);
 		{
-			auto& fieldIn = field.getInput();
-			advectionProgram.registerTexture("uFieldIn", fieldIn, false);
-			context.bind(fieldIn, advectionFieldInBinding);
+			Empty::math::vec3 data(1.f / params.gridSize.x, 1.f / params.gridSize.y, 1.f / params.gridSize.z);
+			advectionProgram.uniform("uGridParams.oneOverGridSize", data);
+		}
+		advectionProgram.uniform("udt", dt);
 
-			auto& fieldOut = field.getOutput();
-			advectionProgram.registerTexture("uFieldOut", fieldOut, false);
-			context.bind(fieldOut.getLevel(0), advectionFieldOutBinding, AccessPolicy::WriteOnly, GPUScalarField::Format);
+		// Inputs are exposed with samplers to benefit from bilinear filtering
 
-			advectionProgram.uniform("uBoundaryCondition", boundaryCondition);
-			advectionProgram.uniform("uFieldStagger", stagger);
+		auto& velocityXTex = fluidState.velocityX.getInput();
+		advectionProgram.registerTexture("uVelocityX", velocityXTex, false);
+		context.bind(velocityXTex, allVelocityXBinding);
 
-			context.dispatchComputeIndirect();
-		};
+		auto& velocityYTex = fluidState.velocityY.getInput();
+		advectionProgram.registerTexture("uVelocityY", velocityYTex, false);
+		context.bind(velocityYTex, allVelocityYBinding);
 
-	advect(fluidState.velocityX, staggeredNoSlipBoundaryCondition, xStagger);
-	advect(fluidState.velocityY, staggeredNoSlipBoundaryCondition, yStagger);
-	advect(fluidState.velocityZ, staggeredNoSlipBoundaryCondition, zStagger);
-	advect(fluidState.inkDensity, zeroBoundaryCondition, noStagger);
+		auto& velocityZTex = fluidState.velocityZ.getInput();
+		advectionProgram.registerTexture("uVelocityZ", velocityZTex, false);
+		context.bind(velocityZTex, allVelocityZBinding);
 
-	fluidState.velocityX.swap();
-	fluidState.velocityY.swap();
-	fluidState.velocityZ.swap();
-	fluidState.inkDensity.swap();
-}
+		context.setShaderProgram(advectionProgram);
 
-fluidsim::JacobiIterator::JacobiIterator(const std::string& label, Empty::math::uvec3 gridSize)
-	: _workingField(label + " working field")
-	, _fieldSource(nullptr)
-	, _field(nullptr)
-	, _numIterations(0)
-	, _currentIteration(0)
-	, _writeToWorkingField(true)
-	, _iterationFieldIn()
-	, _iterationFieldOut()
-{
-	_workingField.setStorage(1, gridSize.x, gridSize.y, gridSize.z);
-}
+		auto advect = [this, &context](BufferedScalarField& field, float boundaryCondition, Empty::math::bvec3 stagger)
+			{
+				auto& fieldIn = field.getInput();
+				advectionProgram.registerTexture("uFieldIn", fieldIn, false);
+				context.bind(fieldIn, advectionFieldInBinding);
 
-void fluidsim::JacobiIterator::init(GPUScalarField& fieldSource, BufferedScalarField& field, int jacobiIterations)
-{
-	assert(jacobiIterations > 0);
+				auto& fieldOut = field.getOutput();
+				advectionProgram.registerTexture("uFieldOut", fieldOut, false);
+				context.bind(fieldOut.getLevel(0), advectionFieldOutBinding, AccessPolicy::WriteOnly, GPUScalarField::Format);
 
-	_fieldSource = &fieldSource;
-	_field = &field;
+				advectionProgram.uniform("uBoundaryCondition", boundaryCondition);
+				advectionProgram.uniform("uFieldStagger", stagger);
 
-	_numIterations = jacobiIterations;
-	_currentIteration = 0;
-	_writeToWorkingField = (_numIterations & 1) == 0;
+				context.dispatchComputeIndirect();
+			};
 
-	// Alternate writes between the working texture and the output field so we write to the output
-	// field last. The first step uses the actual input field as input, the other steps alternate between
-	// working field and output field.
-	_iterationFieldIn = field.getInput().getLevel(0);
-	_iterationFieldOut = _writeToWorkingField ? _workingField.getLevel(0) : field.getOutput().getLevel(0);
-}
+		advect(fluidState.velocityX, staggeredNoSlipBoundaryCondition, xStagger);
+		advect(fluidState.velocityY, staggeredNoSlipBoundaryCondition, yStagger);
+		advect(fluidState.velocityZ, staggeredNoSlipBoundaryCondition, zStagger);
+		advect(fluidState.inkDensity, zeroBoundaryCondition, noStagger);
 
-void fluidsim::JacobiIterator::step(ShaderProgram& jacobiProgram)
-{
-	assert(_field != nullptr);
-	assert(_currentIteration < _numIterations);
-
-	Context& context = Context::get();
-
-	context.bind(_fieldSource->getLevel(0), jacobiFieldSourceBinding, AccessPolicy::ReadOnly, GPUScalarField::Format);
-	context.bind(_iterationFieldIn, jacobiFieldInBinding, AccessPolicy::ReadOnly, GPUScalarField::Format);
-	context.bind(_iterationFieldOut, jacobiFieldOutBinding, AccessPolicy::WriteOnly, GPUScalarField::Format);
-
-	context.dispatchComputeIndirect();
-
-	// I could simply swap _iterationFieldInBinding and _iterationFieldOutBinding but _iterationFieldInBinding
-	// is _fieldInBinding for the first step only, and we can never write to that.
-	_writeToWorkingField = !_writeToWorkingField;
-	_iterationFieldIn = _iterationFieldOut;
-	_iterationFieldOut = _writeToWorkingField ? _workingField.getLevel(0) : _field->getOutput().getLevel(0);
-
-	++_currentIteration;
-}
-
-void fluidsim::JacobiIterator::reset()
-{
-	assert(_currentIteration == _numIterations);
-
-	_fieldSource = nullptr;
-	_field = nullptr;
-	_numIterations = 0;
-	_currentIteration = 0;
-	_writeToWorkingField = true;
-	_iterationFieldIn = TextureLevelInfo{};
-	_iterationFieldOut = TextureLevelInfo{};
-}
-
-fluidsim::DiffusionStep::DiffusionStep(Empty::math::uvec3 gridSize)
-	: jacobiX("Diffuse Jacobi X", gridSize)
-	, jacobiY("Diffuse Jacobi Y", gridSize)
-	, jacobiZ("Diffuse Jacobi Z", gridSize)
-{
-}
-
-void fluidsim::DiffusionStep::compute(ShaderProgram& jacobiProgram, FluidState& fluidState, float dt, int jacobiIterations)
-{
-	const auto& params = fluidState.parameters;
-
-	Context& context = Context::get();
-
-	// Perform Jacobi iterations on individual components
-	jacobiX.init(fluidState.velocityX.getInput(), fluidState.velocityX, jacobiIterations);
-	jacobiY.init(fluidState.velocityY.getInput(), fluidState.velocityY, jacobiIterations);
-	jacobiZ.init(fluidState.velocityZ.getInput(), fluidState.velocityZ, jacobiIterations);
-
-	// Upload solver parameters
-	{
-		float alpha = params.gridCellSize * params.gridCellSize / (params.viscosity * dt);
-		float oneOverBeta = 1.f / (alpha + 6.f);
-		jacobiProgram.uniform("uAlpha", alpha);
-		jacobiProgram.uniform("uOneOverBeta", oneOverBeta);
-		jacobiProgram.uniform("uBoundaryCondition", staggeredNoSlipBoundaryCondition);
-		// The exact stagger doesn't matter since source and destination always have the same one.
-		// The entry point shader just has to know that it is staggered to properly enforce
-		// boundary conditions.
-		jacobiProgram.uniform("uFieldStagger", anyStagger);
+		fluidState.velocityX.swap();
+		fluidState.velocityY.swap();
+		fluidState.velocityZ.swap();
+		fluidState.inkDensity.swap();
 	}
 
-	context.setShaderProgram(jacobiProgram);
 
-	for (int i = 0; i < jacobiIterations; i++)
+	Empty::gl::ShaderProgram advectionProgram;
+};
+
+struct JacobiIterator
+{
+	JacobiIterator(const std::string& label, Empty::math::uvec3 gridSize)
+		: _workingField(label + " working field")
+		, _fieldSource(nullptr)
+		, _field(nullptr)
+		, _numIterations(-1)
+		, _currentIteration(0)
+		, _writeToWorkingField(true)
+		, _iterationFieldIn()
+		, _iterationFieldOut()
 	{
-		if (i > 0)
-			context.memoryBarrier(MemoryBarrierType::ShaderImageAccess);
-		jacobiX.step(jacobiProgram);
-		jacobiY.step(jacobiProgram);
-		jacobiZ.step(jacobiProgram);
+		_workingField.setStorage(1, gridSize.x, gridSize.y, gridSize.z);
 	}
 
-	jacobiX.reset();
-	jacobiY.reset();
-	jacobiZ.reset();
-
-	fluidState.velocityX.swap();
-	fluidState.velocityY.swap();
-	fluidState.velocityZ.swap();
-}
-
-fluidsim::ForcesStep::ForcesStep(Shader& entryPointShader)
-	: forcesProgram("Forces program")
-{
-	forcesProgram.attachShader(entryPointShader);
-	forcesProgram.attachFile(ShaderType::Compute, "shaders/sim/forces.glsl", "Forces shader");
-	forcesProgram.build();
-}
-
-void fluidsim::ForcesStep::compute(FluidState& fluidState, const FluidSimImpulse& impulse, float dt, bool velocityOnly)
-{
-	Context& context = Context::get();
-
-	forcesProgram.uniform("uForceCenter", impulse.position);
-	forcesProgram.uniform("uOneOverForceRadius", 1.f / impulse.radius);
-
-	context.setShaderProgram(forcesProgram);
-
-	auto applyForce = [this, &context](GPUScalarField& field, float forceMagnitude, float boundaryCondition, Empty::math::bvec3 stagger)
+	void init(GPUScalarField& fieldSource, BufferedScalarField& field, int jacobiIterations)
 	{
-		forcesProgram.registerTexture("uField", field, false);
-		context.bind(field.getLevel(0), forcesFieldBinding, AccessPolicy::ReadWrite, GPUScalarField::Format);
+		assert(jacobiIterations > 0);
 
-		forcesProgram.uniform("uForceMagnitude", forceMagnitude);
-		forcesProgram.uniform("uBoundaryCondition", boundaryCondition);
-		forcesProgram.uniform("uFieldStagger", stagger);
+		_fieldSource = &fieldSource;
+		_field = &field;
+
+		_numIterations = jacobiIterations;
+		_currentIteration = 0;
+		_writeToWorkingField = (_numIterations & 1) == 0;
+
+		// Alternate writes between the working texture and the output field so we write to the output
+		// field last. The first step uses the actual input field as input, the other steps alternate between
+		// working field and output field.
+		_iterationFieldIn = field.getInput().getLevel(0);
+		_iterationFieldOut = _writeToWorkingField ? _workingField.getLevel(0) : field.getOutput().getLevel(0);
+	}
+
+	// Expects all parameters except textures to be set in the jacobi program, and it to be active.
+	void step(ShaderProgram& jacobiProgram)
+	{
+		assert(_field != nullptr);
+		assert(_currentIteration < _numIterations);
+
+		Context& context = Context::get();
+
+		context.bind(_fieldSource->getLevel(0), jacobiFieldSourceBinding, AccessPolicy::ReadOnly, GPUScalarField::Format);
+		context.bind(_iterationFieldIn, jacobiFieldInBinding, AccessPolicy::ReadOnly, GPUScalarField::Format);
+		context.bind(_iterationFieldOut, jacobiFieldOutBinding, AccessPolicy::WriteOnly, GPUScalarField::Format);
+
 		context.dispatchComputeIndirect();
-	};
+
+		// I could simply swap _iterationFieldInBinding and _iterationFieldOutBinding but _iterationFieldInBinding
+		// is _fieldInBinding for the first step only, and we can never write to that.
+		_writeToWorkingField = !_writeToWorkingField;
+		_iterationFieldIn = _iterationFieldOut;
+		_iterationFieldOut = _writeToWorkingField ? _workingField.getLevel(0) : _field->getOutput().getLevel(0);
+
+		++_currentIteration;
+	}
+
+	void reset()
+	{
+		assert(_currentIteration == _numIterations);
+
+		_fieldSource = nullptr;
+		_field = nullptr;
+		_numIterations = -1;
+		_currentIteration = 0;
+		_writeToWorkingField = true;
+		_iterationFieldIn = TextureLevelInfo{};
+		_iterationFieldOut = TextureLevelInfo{};
+	}
+
+private:
+	GPUScalarField _workingField;
+
+	GPUScalarField* _fieldSource;
+	BufferedScalarField* _field;
+
+	int _numIterations;
+	int _currentIteration;
+	bool _writeToWorkingField;
+	Empty::gl::TextureLevelInfo _iterationFieldIn;
+	Empty::gl::TextureLevelInfo _iterationFieldOut;
+};
+
+struct FluidSim::DiffusionStep
+{
+	DiffusionStep(Empty::math::uvec3 gridSize)
+		: jacobiX("Diffuse Jacobi X", gridSize)
+		, jacobiY("Diffuse Jacobi Y", gridSize)
+		, jacobiZ("Diffuse Jacobi Z", gridSize)
+	{ }
+
+	void compute(ShaderProgram& jacobiProgram, FluidState& fluidState, float dt, int jacobiIterations)
+	{
+		const auto& params = fluidState.parameters;
+
+		Context& context = Context::get();
+
+		// Perform Jacobi iterations on individual components
+		jacobiX.init(fluidState.velocityX.getInput(), fluidState.velocityX, jacobiIterations);
+		jacobiY.init(fluidState.velocityY.getInput(), fluidState.velocityY, jacobiIterations);
+		jacobiZ.init(fluidState.velocityZ.getInput(), fluidState.velocityZ, jacobiIterations);
+
+		// Upload solver parameters
+		{
+			float alpha = params.gridCellSize * params.gridCellSize / (params.viscosity * dt);
+			float oneOverBeta = 1.f / (alpha + 6.f);
+			jacobiProgram.uniform("uAlpha", alpha);
+			jacobiProgram.uniform("uOneOverBeta", oneOverBeta);
+			jacobiProgram.uniform("uBoundaryCondition", staggeredNoSlipBoundaryCondition);
+			// The exact stagger doesn't matter since source and destination always have the same one.
+			// The entry point shader just has to know that it is staggered to properly enforce
+			// boundary conditions.
+			jacobiProgram.uniform("uFieldStagger", anyStagger);
+		}
+
+		context.setShaderProgram(jacobiProgram);
+
+		for (int i = 0; i < jacobiIterations; i++)
+		{
+			if (i > 0)
+				context.memoryBarrier(MemoryBarrierType::ShaderImageAccess);
+			jacobiX.step(jacobiProgram);
+			jacobiY.step(jacobiProgram);
+			jacobiZ.step(jacobiProgram);
+		}
+
+		jacobiX.reset();
+		jacobiY.reset();
+		jacobiZ.reset();
+
+		fluidState.velocityX.swap();
+		fluidState.velocityY.swap();
+		fluidState.velocityZ.swap();
+	}
+
+	JacobiIterator jacobiX;
+	JacobiIterator jacobiY;
+	JacobiIterator jacobiZ;
+};
+
+struct FluidSim::ForcesStep
+{
+	ForcesStep(Shader& entryPointShader)
+		: forcesProgram("Forces program")
+	{
+		forcesProgram.attachShader(entryPointShader);
+		forcesProgram.attachFile(ShaderType::Compute, "shaders/sim/forces.glsl", "Forces shader");
+		forcesProgram.build();
+	}
+
+	void compute(FluidState& fluidState, const FluidSimImpulse& impulse, float dt, bool velocityOnly)
+	{
+		Context& context = Context::get();
+
+		forcesProgram.uniform("uForceCenter", impulse.position);
+		forcesProgram.uniform("uOneOverForceRadius", 1.f / impulse.radius);
+
+		context.setShaderProgram(forcesProgram);
+
+		auto applyForce = [this, &context](GPUScalarField& field, float forceMagnitude, float boundaryCondition, Empty::math::bvec3 stagger)
+			{
+				forcesProgram.registerTexture("uField", field, false);
+				context.bind(field.getLevel(0), forcesFieldBinding, AccessPolicy::ReadWrite, GPUScalarField::Format);
+
+				forcesProgram.uniform("uForceMagnitude", forceMagnitude);
+				forcesProgram.uniform("uBoundaryCondition", boundaryCondition);
+				forcesProgram.uniform("uFieldStagger", stagger);
+				context.dispatchComputeIndirect();
+			};
 
 	applyForce(fluidState.velocityX.getInput(), impulse.magnitude.x, staggeredNoSlipBoundaryCondition, xStagger);
 	applyForce(fluidState.velocityY.getInput(), impulse.magnitude.y, staggeredNoSlipBoundaryCondition, yStagger);
 	applyForce(fluidState.velocityZ.getInput(), impulse.magnitude.z, staggeredNoSlipBoundaryCondition, zStagger);
-	if (!velocityOnly)
+		if (!velocityOnly)
 		applyForce(fluidState.inkDensity.getInput(), impulse.inkAmount * dt, zeroBoundaryCondition, noStagger);
 
-	// Don't swap textures since we read from and write to the same textures
-}
-
-fluidsim::DivergenceStep::DivergenceStep()
-	: divergenceProgram("Divergence program")
-{
-	divergenceProgram.attachFile(ShaderType::Compute, "shaders/sim/divergence.glsl", "Divergence shader");
-	divergenceProgram.build();
-}
-
-void fluidsim::DivergenceStep::compute(FluidState& fluidState)
-{
-	const auto& params = fluidState.parameters;
-
-	Context& context = Context::get();
-
-	auto& velocityXTex = fluidState.velocityX.getInput();
-	auto& velocityYTex = fluidState.velocityY.getInput();
-	auto& velocityZTex = fluidState.velocityZ.getInput();
-
-	divergenceProgram.uniform("uHalfOneOverDx", 1.f / (2.f * params.gridCellSize));
-	divergenceProgram.registerTexture("uVelocityX", velocityXTex, false);
-	divergenceProgram.registerTexture("uVelocityY", velocityYTex, false);
-	divergenceProgram.registerTexture("uVelocityZ", velocityZTex, false);
-	divergenceProgram.registerTexture("uDivergence", fluidState.divergenceTex, false);
-	context.bind(velocityXTex.getLevel(0), allVelocityXBinding, AccessPolicy::ReadOnly, GPUScalarField::Format);
-	context.bind(velocityYTex.getLevel(0), allVelocityYBinding, AccessPolicy::ReadOnly, GPUScalarField::Format);
-	context.bind(velocityZTex.getLevel(0), allVelocityZBinding, AccessPolicy::ReadOnly, GPUScalarField::Format);
-	context.bind(fluidState.divergenceTex.getLevel(0), divergenceOutBinding, AccessPolicy::WriteOnly, GPUScalarField::Format);
-
-	context.setShaderProgram(divergenceProgram);
-	context.dispatchComputeIndirect();
-}
-
-fluidsim::PressureStep::PressureStep(Empty::math::uvec3 gridSize)
-	: jacobi("Pressure jacobi", gridSize)
-{
-}
-
-void fluidsim::PressureStep::compute(ShaderProgram& jacobiProgram, FluidState& fluidState, int jacobiIterations)
-{
-	const auto& params = fluidState.parameters;
-	Context& context = Context::get();
-
-	fluidState.pressure.clear();
-
-	jacobi.init(fluidState.divergenceTex, fluidState.pressure, jacobiIterations);
-
-	// Upload solver parameters
-	{
-		float alpha = -params.gridCellSize * params.gridCellSize * params.density;
-		float oneOverBeta = 1.f / 6.f;
-		jacobiProgram.uniform("uAlpha", alpha);
-		jacobiProgram.uniform("uOneOverBeta", oneOverBeta);
-		jacobiProgram.uniform("uBoundaryCondition", neumannBoundaryCondition);
-		jacobiProgram.uniform("uFieldStagger", noStagger);
+		// Don't swap textures since we read from and write to the same textures
 	}
 
-	context.setShaderProgram(jacobiProgram);
+	Empty::gl::ShaderProgram forcesProgram;
+};
 
-	for (int i = 0; i < jacobiIterations; i++)
+struct FluidSim::DivergenceStep
+{
+	DivergenceStep()
+		: divergenceProgram("Divergence program")
 	{
-		if (i > 0)
-			context.memoryBarrier(MemoryBarrierType::ShaderImageAccess);
-		jacobi.step(jacobiProgram);
+		divergenceProgram.attachFile(ShaderType::Compute, "shaders/sim/divergence.glsl", "Divergence shader");
+		divergenceProgram.build();
 	}
 
-	jacobi.reset();
+	void compute(FluidState& fluidState)
+	{
+		const auto& params = fluidState.parameters;
 
-	fluidState.pressure.swap();
-}
+		Context& context = Context::get();
 
-fluidsim::ProjectionStep::ProjectionStep(Shader& entryPointShader)
-	: projectionProgram("Projection program")
+		auto& velocityXTex = fluidState.velocityX.getInput();
+		auto& velocityYTex = fluidState.velocityY.getInput();
+		auto& velocityZTex = fluidState.velocityZ.getInput();
+
+		divergenceProgram.uniform("uHalfOneOverDx", 1.f / (2.f * params.gridCellSize));
+		divergenceProgram.registerTexture("uVelocityX", velocityXTex, false);
+		divergenceProgram.registerTexture("uVelocityY", velocityYTex, false);
+		divergenceProgram.registerTexture("uVelocityZ", velocityZTex, false);
+		divergenceProgram.registerTexture("uDivergence", fluidState.divergenceTex, false);
+		context.bind(velocityXTex.getLevel(0), allVelocityXBinding, AccessPolicy::ReadOnly, GPUScalarField::Format);
+		context.bind(velocityYTex.getLevel(0), allVelocityYBinding, AccessPolicy::ReadOnly, GPUScalarField::Format);
+		context.bind(velocityZTex.getLevel(0), allVelocityZBinding, AccessPolicy::ReadOnly, GPUScalarField::Format);
+		context.bind(fluidState.divergenceTex.getLevel(0), divergenceOutBinding, AccessPolicy::WriteOnly, GPUScalarField::Format);
+
+		context.setShaderProgram(divergenceProgram);
+		context.dispatchComputeIndirect();
+	}
+
+	Empty::gl::ShaderProgram divergenceProgram;
+};
+
+struct FluidSim::PressureStep
 {
-	projectionProgram.attachShader(entryPointShader);
-	projectionProgram.attachFile(ShaderType::Compute, "shaders/sim/projection.glsl", "Projection shader");
-	projectionProgram.build();
-}
+	PressureStep(Empty::math::uvec3 gridSize)
+		: jacobi("Pressure jacobi", gridSize)
+	{ }
 
-void fluidsim::ProjectionStep::compute(FluidState& fluidState)
+	void compute(ShaderProgram& jacobiProgram, FluidState& fluidState, int jacobiIterations)
+	{
+		const auto& params = fluidState.parameters;
+		Context& context = Context::get();
+
+		fluidState.pressure.clear();
+
+		jacobi.init(fluidState.divergenceTex, fluidState.pressure, jacobiIterations);
+
+		// Upload solver parameters
+		{
+			float alpha = -params.gridCellSize * params.gridCellSize * params.density;
+			float oneOverBeta = 1.f / 6.f;
+			jacobiProgram.uniform("uAlpha", alpha);
+			jacobiProgram.uniform("uOneOverBeta", oneOverBeta);
+			jacobiProgram.uniform("uBoundaryCondition", neumannBoundaryCondition);
+			jacobiProgram.uniform("uFieldStagger", noStagger);
+		}
+
+		context.setShaderProgram(jacobiProgram);
+
+		for (int i = 0; i < jacobiIterations; i++)
+		{
+			if (i > 0)
+				context.memoryBarrier(MemoryBarrierType::ShaderImageAccess);
+			jacobi.step(jacobiProgram);
+		}
+
+		jacobi.reset();
+
+		fluidState.pressure.swap();
+	}
+
+	JacobiIterator jacobi;
+};
+
+struct FluidSim::ProjectionStep
 {
-	const auto& params = fluidState.parameters;
+	ProjectionStep(Shader& entryPointShader)
+		: projectionProgram("Projection program")
+	{
+		projectionProgram.attachShader(entryPointShader);
+		projectionProgram.attachFile(ShaderType::Compute, "shaders/sim/projection.glsl", "Projection shader");
+		projectionProgram.build();
+	}
 
-	Context& context = Context::get();
+	void compute(FluidState& fluidState)
+	{
+		const auto& params = fluidState.parameters;
 
-	auto& velocityXTex = fluidState.velocityX.getInput();
-	auto& velocityYTex = fluidState.velocityY.getInput();
-	auto& velocityZTex = fluidState.velocityZ.getInput();
-	auto& pressureTex = fluidState.pressure.getInput();
+		Context& context = Context::get();
 
-	projectionProgram.uniform("uHalfOneOverDx", 1.f / (2.f * params.gridCellSize));
-	projectionProgram.registerTexture("uVelocityX", velocityXTex, false);
-	projectionProgram.registerTexture("uVelocityY", velocityYTex, false);
-	projectionProgram.registerTexture("uVelocityZ", velocityZTex, false);
-	projectionProgram.registerTexture("uPressure", pressureTex, false);
-	// The exact stagger doesn't matter since the program is not generic and knows
-	// exactly how to perform its task. The entry point shader just has to know that
-	// its input fields are staggered to properly enforce boundary conditions.
-	projectionProgram.uniform("uFieldStagger", anyStagger);
-	context.bind(velocityXTex.getLevel(0), allVelocityXBinding, AccessPolicy::ReadWrite, GPUScalarField::Format);
-	context.bind(velocityYTex.getLevel(0), allVelocityYBinding, AccessPolicy::ReadWrite, GPUScalarField::Format);
-	context.bind(velocityZTex.getLevel(0), allVelocityZBinding, AccessPolicy::ReadWrite, GPUScalarField::Format);
-	context.bind(pressureTex.getLevel(0), projectionPressureBinding, AccessPolicy::ReadOnly, GPUScalarField::Format);
+		auto& velocityXTex = fluidState.velocityX.getInput();
+		auto& velocityYTex = fluidState.velocityY.getInput();
+		auto& velocityZTex = fluidState.velocityZ.getInput();
+		auto& pressureTex = fluidState.pressure.getInput();
 
-	context.setShaderProgram(projectionProgram);
-	context.dispatchComputeIndirect();
+		projectionProgram.uniform("uHalfOneOverDx", 1.f / (2.f * params.gridCellSize));
+		projectionProgram.registerTexture("uVelocityX", velocityXTex, false);
+		projectionProgram.registerTexture("uVelocityY", velocityYTex, false);
+		projectionProgram.registerTexture("uVelocityZ", velocityZTex, false);
+		projectionProgram.registerTexture("uPressure", pressureTex, false);
+		// The exact stagger doesn't matter since the program is not generic and knows
+		// exactly how to perform its task. The entry point shader just has to know that
+		// its input fields are staggered to properly enforce boundary conditions.
+		projectionProgram.uniform("uFieldStagger", anyStagger);
+		context.bind(velocityXTex.getLevel(0), allVelocityXBinding, AccessPolicy::ReadWrite, GPUScalarField::Format);
+		context.bind(velocityYTex.getLevel(0), allVelocityYBinding, AccessPolicy::ReadWrite, GPUScalarField::Format);
+		context.bind(velocityZTex.getLevel(0), allVelocityZBinding, AccessPolicy::ReadWrite, GPUScalarField::Format);
+		context.bind(pressureTex.getLevel(0), projectionPressureBinding, AccessPolicy::ReadOnly, GPUScalarField::Format);
 
-	// Don't swap textures since we read from and write to the same textures
-}
+		context.setShaderProgram(projectionProgram);
+		context.dispatchComputeIndirect();
+
+		// Don't swap textures since we read from and write to the same textures
+	}
+
+	Empty::gl::ShaderProgram projectionProgram;
+};
+
+// **********************
+// Main fluid sim methods
+// **********************
 
 FluidSim::FluidSim(Empty::math::uvec3 gridSize)
 	: diffusionJacobiSteps(100)
@@ -406,13 +457,15 @@ FluidSim::FluidSim(Empty::math::uvec3 gridSize)
 	Empty::math::uvec3 dispatch(gridSize.x / entryPointWorkGroupX, gridSize.y / entryPointWorkGroupY, gridSize.z / entryPointWorkGroupZ);
 	_entryPointIndirectDispatchBuffer.setStorage(sizeof(dispatch), BufferUsage::StaticDraw, dispatch);
 
-	_advectionStep = std::make_unique<fluidsim::AdvectionStep>(_entryPointShader);
-	_diffusionStep = std::make_unique<fluidsim::DiffusionStep>(gridSize);
-	_forcesStep = std::make_unique<fluidsim::ForcesStep>(_entryPointShader);
-	_divergenceStep = std::make_unique<fluidsim::DivergenceStep>();
-	_pressureStep = std::make_unique<fluidsim::PressureStep>(gridSize);
-	_projectionStep = std::make_unique<fluidsim::ProjectionStep>(_entryPointShader);
+	_advectionStep = std::make_unique<AdvectionStep>(_entryPointShader);
+	_diffusionStep = std::make_unique<DiffusionStep>(gridSize);
+	_forcesStep = std::make_unique<ForcesStep>(_entryPointShader);
+	_divergenceStep = std::make_unique<DivergenceStep>();
+	_pressureStep = std::make_unique<PressureStep>(gridSize);
+	_projectionStep = std::make_unique<ProjectionStep>(_entryPointShader);
 }
+
+FluidSim::~FluidSim() = default;
 
 FluidSimHookId FluidSim::registerHook(FluidSimHook hook, FluidSimHookStage when)
 {
