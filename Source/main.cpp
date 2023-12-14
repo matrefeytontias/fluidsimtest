@@ -91,8 +91,8 @@ int main(int argc, char* argv[])
 	VertexArray debugVAO("Debug VAO");
 	context.bind(debugVAO);
 	ShaderProgram debugDrawProgram("Debug draw program");
-	debugDrawProgram.attachFile(ShaderType::Vertex, "shaders/debug/vertex.glsl", "Debug draw vertex");
-	debugDrawProgram.attachFile(ShaderType::Fragment, "shaders/debug/fragment.glsl", "Debug draw fragment");
+	debugDrawProgram.attachFile(ShaderType::Vertex, "shaders/draw/debug_vertex.glsl", "Debug draw vertex");
+	debugDrawProgram.attachFile(ShaderType::Fragment, "shaders/draw/debug_fragment.glsl", "Debug draw fragment");
 	debugDrawProgram.build();
 	debugDrawProgram.uniform("uTextureSizeOverScreenSize", Empty::math::vec2(fluidState.parameters.gridSize) * fluidRenderParameters.gridCellSizeInPx / Empty::math::vec2(context.frameWidth, context.frameHeight));
 	debugDrawProgram.uniform("uColorScale", colorScale);
