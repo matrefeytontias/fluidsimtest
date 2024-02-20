@@ -8,45 +8,42 @@
 // Types related to fluid simulation
 // *********************************
 
-struct FluidSimParameters
+struct FluidGridParameters
 {
-	const Empty::math::uvec2 gridSize;
-	float gridCellSize;
-	float density;
-	float viscosity;
+	// In texels
+	Empty::math::uvec2 size;
+	// In meters
+	float cellSize;
 };
 
 struct FluidSimMouseClickImpulse
 {
 	Empty::math::vec2 position;
 	Empty::math::vec2 magnitude;
-	float inkAmount;
 	float radius;
+	float inkAmount;
 };
 
-struct FluidRenderParameters
+struct FluidPhysicalProperties
 {
-	FluidRenderParameters(Empty::math::uvec2 frame, Empty::math::uvec2 gridSize, float gridCellSizeInPx)
-	{
-		topLeftCorner = (Empty::math::vec2(frame) - Empty::math::vec2(gridSize) * gridCellSizeInPx) / 2.f;
-		this->gridCellSizeInPx = gridCellSizeInPx;
-	}
-
-	Empty::math::vec2 topLeftCorner;
-	float gridCellSizeInPx;
+	// In kg/dm²
+	float density;
+	// In m²/s
+	float kinematicViscosity;
 };
 
 struct FluidState
 {
-	FluidState(Empty::math::uvec2 gridSize, float gridCellSize, float density, float viscosity) :
-		parameters{ gridSize, gridCellSize, density, viscosity },
-		velocityX{ "Velocity X", gridSize },
-		velocityY{ "Velocity Y", gridSize },
-		pressure{ "Pressure", gridSize },
-		divergenceTex("Divergence"),
-		inkDensity{ "Ink density", gridSize }
+	FluidState(const FluidGridParameters& grid, const FluidPhysicalProperties& physics)
+		: grid{ grid }
+		, physics{ physics }
+		, velocityX{ "Velocity X", grid.size }
+		, velocityY{ "Velocity Y", grid.size }
+		, pressure{ "Pressure", grid.size }
+		, divergenceTex("Divergence")
+		, inkDensity{ "Ink density", grid.size }
 	{
-		divergenceTex.setStorage(1, gridSize.x, gridSize.y);
+		divergenceTex.setStorage(1, grid.size.x, grid.size.y);
 	}
 
 	void reset()
@@ -58,7 +55,8 @@ struct FluidState
 		inkDensity.clear();
 	}
 	
-	FluidSimParameters parameters;
+	FluidGridParameters grid;
+	FluidPhysicalProperties physics;
 
 	// Fields we need
 	BufferedScalarField velocityX;

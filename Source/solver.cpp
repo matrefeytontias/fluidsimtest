@@ -62,12 +62,12 @@ struct FluidSim::AdvectionStep
 	{
 		Context& context = Context::get();
 
-		auto& params = fluidState.parameters;
+		auto& params = fluidState.grid;
 
-		advectionProgram.uniform("uGridParams.dx", params.gridCellSize);
-		advectionProgram.uniform("uGridParams.oneOverDx", 1.f / params.gridCellSize);
+		advectionProgram.uniform("uGridParams.dx", params.cellSize);
+		advectionProgram.uniform("uGridParams.oneOverDx", 1.f / params.cellSize);
 		{
-			Empty::math::vec2 data(1.f / params.gridSize.x, 1.f / params.gridSize.y);
+			Empty::math::vec2 data(1.f / params.size.x, 1.f / params.size.y);
 			advectionProgram.uniform("uGridParams.oneOverGridSize", data);
 		}
 		advectionProgram.uniform("udt", dt);
@@ -228,7 +228,7 @@ struct FluidSim::DiffusionStep
 
 	void compute(ShaderProgram& jacobiProgram, FluidState& fluidState, float dt, int jacobiIterations)
 	{
-		const auto& params = fluidState.parameters;
+		const auto& params = fluidState.grid;
 
 		Context& context = Context::get();
 
@@ -238,7 +238,7 @@ struct FluidSim::DiffusionStep
 
 		// Upload solver parameters
 		{
-			float alpha = params.gridCellSize * params.gridCellSize / (params.viscosity * dt);
+			float alpha = params.cellSize * params.cellSize / (fluidState.physics.kinematicViscosity * dt);
 			float oneOverBeta = 1.f / (alpha + 4.f);
 			jacobiProgram.uniform("uAlpha", alpha);
 			jacobiProgram.uniform("uOneOverBeta", oneOverBeta);
@@ -326,14 +326,14 @@ struct FluidSim::DivergenceStep
 
 	void compute(FluidState& fluidState)
 	{
-		const auto& params = fluidState.parameters;
+		const auto& params = fluidState.grid;
 
 		Context& context = Context::get();
 
 		auto& velocityXTex = fluidState.velocityX.getInput();
 		auto& velocityYTex = fluidState.velocityY.getInput();
 
-		divergenceProgram.uniform("uHalfOneOverDx", 1.f / (2.f * params.gridCellSize));
+		divergenceProgram.uniform("uHalfOneOverDx", 1.f / (2.f * params.cellSize));
 		divergenceProgram.registerTexture("uVelocityX", velocityXTex, false);
 		divergenceProgram.registerTexture("uVelocityY", velocityYTex, false);
 		divergenceProgram.registerTexture("uDivergence", fluidState.divergenceTex, false);
@@ -357,7 +357,7 @@ struct FluidSim::PressureStep
 
 	void compute(ShaderProgram& jacobiProgram, FluidState& fluidState, int jacobiIterations)
 	{
-		const auto& params = fluidState.parameters;
+		const auto& params = fluidState.grid;
 		Context& context = Context::get();
 
 		fluidState.pressure.clear();
@@ -366,7 +366,7 @@ struct FluidSim::PressureStep
 
 		// Upload solver parameters
 		{
-			float alpha = -params.gridCellSize * params.gridCellSize * params.density;
+			float alpha = -params.cellSize * params.cellSize * fluidState.physics.density;
 			float oneOverBeta = 1.f / 4.f;
 			jacobiProgram.uniform("uAlpha", alpha);
 			jacobiProgram.uniform("uOneOverBeta", oneOverBeta);
@@ -403,7 +403,7 @@ struct FluidSim::ProjectionStep
 
 	void compute(FluidState& fluidState)
 	{
-		const auto& params = fluidState.parameters;
+		const auto& params = fluidState.grid;
 
 		Context& context = Context::get();
 
@@ -411,7 +411,7 @@ struct FluidSim::ProjectionStep
 		auto& velocityYTex = fluidState.velocityY.getInput();
 		auto& pressureTex = fluidState.pressure.getInput();
 
-		projectionProgram.uniform("uHalfOneOverDx", 1.f / (2.f * params.gridCellSize));
+		projectionProgram.uniform("uHalfOneOverDx", 1.f / (2.f * params.cellSize));
 		projectionProgram.registerTexture("uVelocityX", velocityXTex, false);
 		projectionProgram.registerTexture("uVelocityY", velocityYTex, false);
 		projectionProgram.registerTexture("uPressure", pressureTex, false);
@@ -431,6 +431,10 @@ struct FluidSim::ProjectionStep
 
 	Empty::gl::ShaderProgram projectionProgram;
 };
+
+// ***************************
+// Main fluid simulation class
+// ***************************
 
 FluidSim::FluidSim(Empty::math::uvec2 gridSize)
 	: diffusionJacobiSteps(100)
@@ -490,6 +494,7 @@ void FluidSim::unregisterHook(FluidSimHookId id)
 
 void FluidSim::applyForces(FluidState& fluidState, FluidSimMouseClickImpulse& impulse, bool velocityOnly, float dt)
 {
+	Context::get().bind(_entryPointIndirectDispatchBuffer, BufferTarget::DispatchIndirect);
 	_forcesStep->compute(fluidState, impulse, dt, velocityOnly);
 }
 

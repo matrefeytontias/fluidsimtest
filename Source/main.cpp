@@ -18,6 +18,17 @@ using namespace Empty::gl;
 
 Context Context::_instance;
 
+struct FluidSimRenderParameters
+{
+	FluidSimRenderParameters(int frameWidth, int frameHeight, int gridWidth, int gridHeight, float cellSizeInPx)
+		: cellSizeInPx(cellSizeInPx)
+	{
+		topLeftCorner = Empty::math::vec2(frameWidth - gridWidth * cellSizeInPx, frameHeight - gridHeight * cellSizeInPx) * 0.5f;
+	}
+	Empty::math::vec2 topLeftCorner;
+	float cellSizeInPx;
+};
+
 void debugCallback(DebugMessageSource source, DebugMessageType type, DebugMessageSeverity severity, int id, const std::string& text, const void* userData)
 {
 	std::cout << Empty::utils::name(source) << " (" << Empty::utils::name(type) << ", " << Empty::utils::name(severity) << "): " << text << std::endl;
@@ -65,9 +76,14 @@ int main(int argc, char* argv[])
 	context.debugMessageCallback(debugCallback, nullptr);
 
 	// Fluid setup
-	FluidState fluidState(Empty::math::uvec2(256, 256), 0.8f, 1.f, 0.0025f);
-	FluidRenderParameters fluidRenderParameters{ Empty::math::uvec2(context.frameWidth, context.frameHeight), fluidState.parameters.gridSize, 4.f };
-	FluidSim fluidSim(fluidState.parameters.gridSize);
+	FluidGridParameters grid;
+	grid.size = Empty::math::uvec2(256, 256);
+	grid.cellSize = 0.8f;
+	FluidPhysicalProperties physics;
+	physics.density = 1.f;
+	physics.kinematicViscosity = 0.0025f;
+	FluidState fluidState(grid, physics);
+	FluidSim fluidSim(fluidState.grid.size);
 
 	double then = glfwGetTime();
 	Empty::math::vec2 mouseThen = ImGui::GetMousePos();
@@ -88,13 +104,15 @@ int main(int argc, char* argv[])
 	float colorScale = 1.f;
 
 	// Debug texture draw
+	FluidSimRenderParameters renderParams(context.frameWidth, context.frameHeight, grid.size.x, grid.size.y, 4.f);
+
 	VertexArray debugVAO("Debug VAO");
 	context.bind(debugVAO);
 	ShaderProgram debugDrawProgram("Debug draw program");
 	debugDrawProgram.attachFile(ShaderType::Vertex, "shaders/draw/debug_vertex.glsl", "Debug draw vertex");
 	debugDrawProgram.attachFile(ShaderType::Fragment, "shaders/draw/debug_fragment.glsl", "Debug draw fragment");
 	debugDrawProgram.build();
-	debugDrawProgram.uniform("uTextureSizeOverScreenSize", Empty::math::vec2(fluidState.parameters.gridSize) * fluidRenderParameters.gridCellSizeInPx / Empty::math::vec2(context.frameWidth, context.frameHeight));
+	debugDrawProgram.uniform("uTextureSizeOverScreenSize", Empty::math::vec2(grid.size) * renderParams.cellSizeInPx / Empty::math::vec2(context.frameWidth, context.frameHeight));
 	debugDrawProgram.uniform("uColorScale", colorScale);
 
 	auto debugTextureLambda = [&displayDebugTexture, &debugDrawProgram, &whichDebugTexture](FluidState& fluidState, float dt)
@@ -116,7 +134,7 @@ int main(int argc, char* argv[])
 		if (ImGui::Begin("Fluid simulation", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
 		{
 			ImGui::TextDisabled("%.1f fps", 1.f / dt);
-			if (ImGui::Checkbox("Cap FPS", &capFPS))
+			if (ImGui::Checkbox("VSync", &capFPS))
 				glfwSwapInterval(capFPS);
 			ImGui::Checkbox("Pause simulation (P)", &pauseSimulation);
 			if (ImGui::IsKeyPressed(ImGuiKey_P))
@@ -128,13 +146,11 @@ int main(int argc, char* argv[])
 			if (ImGui::Button("Reset"))
 				fluidState.reset();
 
-			ImGui::Indent();
 			ImGui::Checkbox("Advection", &fluidSim.runAdvection);
 			ImGui::Checkbox("Diffusion", &fluidSim.runDiffusion);
 			ImGui::Checkbox("Divergence", &fluidSim.runDivergence);
 			ImGui::Checkbox("Pressure", &fluidSim.runPressure);
 			ImGui::Checkbox("Projection", &fluidSim.runProjection);
-			ImGui::Unindent();
 
 			ImGui::Separator();
 			ImGui::TextDisabled("Jacobi solver parameters");
@@ -142,9 +158,9 @@ int main(int argc, char* argv[])
 			ImGui::DragInt("Pressure Jacobi steps", &fluidSim.pressureJacobiSteps, 1, 1);
 			ImGui::Separator();
 			ImGui::TextDisabled("Fluid physics properties");
-			ImGui::SliderFloat("Grid cell size (m)", &fluidState.parameters.gridCellSize, 0.0001f, 1.f);
-			ImGui::SliderFloat("Density (kg/dm^3)", &fluidState.parameters.density, 0.0001f, 1.f);
-			ImGui::SliderFloat("Kinematic viscosity (m^2/s)", &fluidState.parameters.viscosity, 0.f, 0.005f, "%.5f");
+			ImGui::SliderFloat("Grid cell size (m)", &fluidState.grid.cellSize, 0.0001f, 1.f);
+			ImGui::SliderFloat("Density (kg/dm^3)", &fluidState.physics.density, 0.0001f, 1.f);
+			ImGui::SliderFloat("Kinematic viscosity (m^2/s)", &fluidState.physics.kinematicViscosity, 0.f, 0.005f, "%.5f");
 			ImGui::Separator();
 			ImGui::TextDisabled("Mouse click impulse parameters");
 			ImGui::DragFloat("Force scale", &forceScale, 0.1f, 0.f, 20.f);
@@ -173,9 +189,9 @@ int main(int argc, char* argv[])
 			{
 				impulse.magnitude = (mouseNow - mouseThen) * forceScale;
 				impulse.magnitude.y *= -1;
-				impulse.position = mouseNow - fluidRenderParameters.topLeftCorner;
-				impulse.position /= fluidRenderParameters.gridCellSizeInPx;
-				impulse.position.y = fluidState.parameters.gridSize.y - impulse.position.y;
+				impulse.position = mouseNow - renderParams.topLeftCorner;
+				impulse.position /= renderParams.cellSizeInPx;
+				impulse.position.y = fluidState.grid.size.y - impulse.position.y;
 
 				context.memoryBarrier(MemoryBarrierType::ShaderImageAccess);
 				fluidSim.applyForces(fluidState, impulse, rightMouseDown, dt);
@@ -196,8 +212,8 @@ int main(int argc, char* argv[])
 		{
 			auto* drawList = ImGui::GetBackgroundDrawList();
 
-			drawList->AddRect(fluidRenderParameters.topLeftCorner - Empty::math::vec2(1, 1),
-				fluidRenderParameters.topLeftCorner + Empty::math::vec2(fluidState.parameters.gridSize) * fluidRenderParameters.gridCellSizeInPx + Empty::math::vec2(2, 2),
+			drawList->AddRect(renderParams.topLeftCorner - Empty::math::vec2(1, 1),
+				renderParams.topLeftCorner + Empty::math::vec2(fluidState.grid.size) * renderParams.cellSizeInPx + Empty::math::vec2(2, 2),
 				ImColor(0, 255, 0));
 
 			if (!displayDebugTexture)
