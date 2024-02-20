@@ -40,6 +40,8 @@ vec2 bilerpVelocity(vec2 position)
 }
 
 // Semi-lagrangian advection via 3rd-order Runge-Kutta time integration
+// Fluid Simulation for Computer Graphics, Second Edition, Robert Bridson
+// Appendix A.2.2 Time Integration
 vec2 traceBack(vec2 position)
 {
 	vec2 k1 = bilerpVelocity(position);
