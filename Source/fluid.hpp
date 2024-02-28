@@ -16,20 +16,20 @@ struct FluidGridParameters
 	float cellSize;
 };
 
-struct FluidSimMouseClickImpulse
-{
-	Empty::math::vec2 position;
-	Empty::math::vec2 magnitude;
-	float radius;
-	float inkAmount;
-};
-
 struct FluidPhysicalProperties
 {
 	// In kg/dm²
 	float density;
 	// In m²/s
 	float kinematicViscosity;
+};
+
+struct FluidSimMouseClickImpulse
+{
+	Empty::math::vec2 position;
+	Empty::math::vec2 magnitude;
+	float radius;
+	float inkAmount;
 };
 
 struct FluidState

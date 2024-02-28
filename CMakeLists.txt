@@ -10,6 +10,8 @@ project(FluidSim DESCRIPTION "Fluid simulation playground" LANGUAGES C CXX)
 
 set(SOURCES
     Source/main.cpp
+    Source/gui.h
+    Source/gui.cpp
     Source/Context.h
     Source/fields.hpp
     Source/fluid.hpp

@@ -19,6 +19,8 @@ struct BufferedField
 		fields{ { name + " 1" } , { name + " 2"} },
 		writingBackBuffer(true)
 	{
+		using namespace Empty::gl;
+
 		for (int i : { 0, 1 })
 		{
 			fields[i].setStorage(1, size.x, size.y);
@@ -30,6 +32,8 @@ struct BufferedField
 
 	void clear()
 	{
+		using namespace Empty::gl;
+
 		fields[0].template clearLevel<Format, DataType::Float>(0);
 		fields[1].template clearLevel<Format, DataType::Float>(0);
 		writingBackBuffer = true;
