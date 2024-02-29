@@ -54,7 +54,7 @@ struct FluidSim::AdvectionStep
 		: advectionProgram("Advection program")
 	{
 		advectionProgram.attachShader(entryPointShader);
-		advectionProgram.attachFile(ShaderType::Compute, "shaders/advection.glsl", "Advection shader");
+		advectionProgram.attachFile(ShaderType::Compute, "shaders/sim/advection.glsl", "Advection shader");
 		advectionProgram.build();
 	}
 
@@ -276,7 +276,7 @@ struct FluidSim::ForcesStep
 		: forcesProgram("Forces program")
 	{
 		forcesProgram.attachShader(entryPointShader);
-		forcesProgram.attachFile(ShaderType::Compute, "shaders/forces.glsl", "Forces shader");
+		forcesProgram.attachFile(ShaderType::Compute, "shaders/sim/forces.glsl", "Forces shader");
 		forcesProgram.build();
 	}
 
@@ -320,7 +320,7 @@ struct FluidSim::DivergenceStep
 	DivergenceStep()
 		: divergenceProgram("Divergence program")
 	{
-		divergenceProgram.attachFile(ShaderType::Compute, "shaders/divergence.glsl", "Divergence shader");
+		divergenceProgram.attachFile(ShaderType::Compute, "shaders/sim/divergence.glsl", "Divergence shader");
 		divergenceProgram.build();
 	}
 
@@ -397,7 +397,7 @@ struct FluidSim::ProjectionStep
 		: projectionProgram("Projection program")
 	{
 		projectionProgram.attachShader(entryPointShader);
-		projectionProgram.attachFile(ShaderType::Compute, "shaders/projection.glsl", "Projection shader");
+		projectionProgram.attachFile(ShaderType::Compute, "shaders/sim/projection.glsl", "Projection shader");
 		projectionProgram.build();
 	}
 
@@ -450,11 +450,11 @@ FluidSim::FluidSim(Empty::math::uvec2 gridSize)
 	, _jacobiProgram("Jacobi program")
 	, _entryPointIndirectDispatchBuffer("Entry point indirect dispatch args")
 {
-	if (!_entryPointShader.setSourceFromFile("shaders/entry_point.glsl"))
+	if (!_entryPointShader.setSourceFromFile("shaders/sim/entry_point.glsl"))
 		FATAL("Failed to compile entry point shader:\n" << _entryPointShader.getLog());
 
 	_jacobiProgram.attachShader(_entryPointShader);
-	_jacobiProgram.attachFile(ShaderType::Compute, "shaders/jacobi.glsl", "Jacobi shader");
+	_jacobiProgram.attachFile(ShaderType::Compute, "shaders/sim/jacobi.glsl", "Jacobi shader");
 	_jacobiProgram.build();
 
 	Empty::math::uvec3 dispatch(gridSize.x / entryPointWorkGroupX, gridSize.y / entryPointWorkGroupY, 1);

@@ -65,6 +65,8 @@ struct Context : public Empty::Context, Empty::utils::noncopyable
         frameWidth = w;
         frameHeight = h;
 
+        Empty::gl::Framebuffer::initDefaultFramebuffer();
+
         _init = true;
         return true;
     }
@@ -84,7 +86,7 @@ struct Context : public Empty::Context, Empty::utils::noncopyable
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
         glfwPollEvents();
         glfwSwapBuffers(window);
-        Framebuffer::dflt.clearAttachment<FramebufferAttachment::Color>(0, Empty::math::vec4::zero);
+        Framebuffer::dflt->clearAttachment<FramebufferAttachment::Color>(0, Empty::math::vec4::zero);
     }
 
     void terminate()
