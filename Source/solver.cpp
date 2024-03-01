@@ -243,10 +243,6 @@ struct FluidSim::DiffusionStep
 			jacobiProgram.uniform("uAlpha", alpha);
 			jacobiProgram.uniform("uOneOverBeta", oneOverBeta);
 			jacobiProgram.uniform("uBoundaryCondition", staggeredNoSlipBoundaryCondition);
-			// The exact stagger doesn't matter since source and destination always have the same one.
-			// The entry point shader just has to know that it is staggered to properly enforce
-			// boundary conditions.
-			jacobiProgram.uniform("uFieldStagger", anyStagger);
 		}
 
 		context.setShaderProgram(jacobiProgram);
@@ -255,7 +251,9 @@ struct FluidSim::DiffusionStep
 		{
 			if (i > 0)
 				context.memoryBarrier(MemoryBarrierType::ShaderImageAccess);
+			jacobiProgram.uniform("uFieldStagger", xStagger);
 			jacobiX.step(jacobiProgram);
+			jacobiProgram.uniform("uFieldStagger", yStagger);
 			jacobiY.step(jacobiProgram);
 		}
 
@@ -393,12 +391,14 @@ struct FluidSim::PressureStep
 
 struct FluidSim::ProjectionStep
 {
-	ProjectionStep(Shader& entryPointShader)
+	ProjectionStep()
 		: projectionProgram("Projection program")
 	{
-		projectionProgram.attachShader(entryPointShader);
 		projectionProgram.attachFile(ShaderType::Compute, "shaders/sim/projection.glsl", "Projection shader");
-		projectionProgram.build();
+		if (!projectionProgram.build())
+		{
+			FATAL("Could not build projection program: " << projectionProgram.getLog());
+		}
 	}
 
 	void compute(FluidState& fluidState)
@@ -415,10 +415,6 @@ struct FluidSim::ProjectionStep
 		projectionProgram.registerTexture("uVelocityX", velocityXTex, false);
 		projectionProgram.registerTexture("uVelocityY", velocityYTex, false);
 		projectionProgram.registerTexture("uPressure", pressureTex, false);
-		// The exact stagger doesn't matter since the program is not generic and knows
-		// exactly how to perform its task. The entry point shader just has to know that
-		// its input fields are staggered to properly enforce boundary conditions.
-		projectionProgram.uniform("uFieldStagger", anyStagger);
 		context.bind(velocityXTex.getLevel(0), allVelocityXBinding, AccessPolicy::ReadWrite, GPUScalarField::Format);
 		context.bind(velocityYTex.getLevel(0), allVelocityYBinding, AccessPolicy::ReadWrite, GPUScalarField::Format);
 		context.bind(pressureTex.getLevel(0), projectionPressureBinding, AccessPolicy::ReadOnly, GPUScalarField::Format);
@@ -465,7 +461,7 @@ FluidSim::FluidSim(Empty::math::uvec2 gridSize)
 	_forcesStep = std::make_unique<ForcesStep>(_entryPointShader);
 	_divergenceStep = std::make_unique<DivergenceStep>();
 	_pressureStep = std::make_unique<PressureStep>(gridSize);
-	_projectionStep = std::make_unique<ProjectionStep>(_entryPointShader);
+	_projectionStep = std::make_unique<ProjectionStep>();
 }
 
 FluidSim::~FluidSim() = default;

@@ -103,11 +103,15 @@ float interpolateField(vec2 uv)
 	return monotonicCubicInterpolation(q0, q1, q2, q3, t.y);
 }
 
-void compute(ivec2 texel, ivec2 outputTexel, bool boundaryTexel)
+void compute(ivec2 texel, ivec2 outputTexel, bool applyBoundaryConditions, bool unused)
 {
 	vec2 fieldStagger = ivec2(uFieldStagger) * 0.5;
 	vec2 samplePosition = texelSpaceToGridSpace(texel, fieldStagger);
 	float newValue = interpolateField(gridSpaceToUV(traceBack(samplePosition), fieldStagger));
 
-	imageStore(uFieldOut, outputTexel, vec4(boundaryTexel ? uBoundaryCondition * newValue : newValue));
+	imageStore(uFieldOut, outputTexel, vec4(unused
+		? 0.
+		: applyBoundaryConditions
+			? uBoundaryCondition * newValue
+			: newValue));
 }
