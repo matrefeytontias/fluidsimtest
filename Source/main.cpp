@@ -51,7 +51,7 @@ void displayTexture(ShaderProgram& debugDrawProgram, const TextureInfo&& texture
 	context.drawArrays(PrimitiveType::Triangles, 0, 6);
 }
 
-int main(int argc, char* argv[])
+int _main(int argc, char* argv[])
 {
 	Context& context = Context::get();
 
@@ -147,12 +147,12 @@ int main(int argc, char* argv[])
 			auto* drawList = ImGui::GetBackgroundDrawList();
 
 			drawList->AddRect(renderParams.topLeftCorner - Empty::math::vec2(1, 1),
-				renderParams.topLeftCorner + Empty::math::vec2(fluidState.grid.size) * renderParams.cellSizeInPx + Empty::math::vec2(2, 2),
+				renderParams.topLeftCorner + Empty::math::vec2(fluidState.grid.size) * renderParams.cellSizeInPx + Empty::math::vec2(1, 1),
 				ImColor(0, 255, 0));
 
 			if (!simControls.displayDebugTexture)
 				displayTexture(debugDrawProgram, fluidState.inkDensity.getInput().getInfo());
-		}
+			}
 
 		// ImGui::ShowDemoWindow();
 
@@ -165,4 +165,17 @@ int main(int argc, char* argv[])
 	context.terminate();
 
 	return 0;
+}
+
+int main(int argc, char* argv[])
+{
+	try
+	{
+		return _main(argc, argv);
+	}
+	catch (std::exception e)
+	{
+		std::cout << e.what() << std::endl;
+		return 1;
+	}
 }
