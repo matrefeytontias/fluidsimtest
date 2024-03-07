@@ -41,10 +41,17 @@ void doGUI(FluidSim& fluidSim, FluidState& fluidState, SimulationControls& simCo
 		ImGui::DragFloat("Force radius", &simControls.impulse.radius, 1.f, 1.f);
 		ImGui::DragFloat("Ink injection", &simControls.impulse.inkAmount, 0.5f, 0.f, 50.f);
 		ImGui::Separator();
+		ImGui::TextDisabled("Other parameters");
+		if (ImGui::DragFloat2("Exterior velocity", fluidState.exteriorVelocity))
+		{
+			fluidState.velocityX.setBoundaryValue(fluidState.exteriorVelocity.xxxx());
+			fluidState.velocityY.setBoundaryValue(fluidState.exteriorVelocity.yyyy());
+		}
+		ImGui::Separator();
 		ImGui::TextDisabled("Debug texture display");
 		ImGui::Checkbox("Display debug texture", &simControls.displayDebugTexture);
-		ImGui::Combo("Display which", &simControls.whichDebugTexture, "Velocity X\0Velocity Y\0Pressure\0Velocity divergence\0");
-		if (ImGui::Combo("Display when", &simControls.whenDebugTexture, "Start of frame\0After advection\0After diffusion\0After divergence\0After pressure computation\0After projection\0\0"))
+		ImGui::Combo("Display which", &simControls.whichDebugTexture, "Velocity X\0Velocity Y\0Pressure\0Velocity divergence\0Boundaries\0");
+		if (ImGui::Combo("Display when", &simControls.whenDebugTexture, "Start of frame\0After advection\0After diffusion\0After divergence\0After pressure computation\0After projection\0"))
 			fluidSim.modifyHookStage(simControls.debugTextureLambdaHookId, static_cast<FluidSimHookStage>(simControls.whenDebugTexture));
 
 		if (ImGui::DragFloat("Debug color scale", &simControls.colorScale, 0.001f, 0.0f, 1.f))

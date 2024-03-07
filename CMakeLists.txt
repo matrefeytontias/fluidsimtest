@@ -33,6 +33,7 @@ set(RESOURCES
     shaders/sim/divergence.glsl
     shaders/sim/forces.glsl
     shaders/sim/jacobi.glsl
+    shaders/sim/make_boundaries.glsl
     shaders/sim/projection.glsl
     # Drawing shaders
     shaders/draw/debug_vertex.glsl

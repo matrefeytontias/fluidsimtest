@@ -37,13 +37,16 @@ struct FluidState
 	FluidState(const FluidGridParameters& grid, const FluidPhysicalProperties& physics)
 		: grid{ grid }
 		, physics{ physics }
+		, exteriorVelocity{ Empty::math::vec2::zero }
 		, velocityX{ "Velocity X", grid.size }
 		, velocityY{ "Velocity Y", grid.size }
 		, pressure{ "Pressure", grid.size }
 		, divergenceTex("Divergence")
+		, boundariesTex("Boundaries")
 		, inkDensity{ "Ink density", grid.size }
 	{
 		divergenceTex.setStorage(1, grid.size.x, grid.size.y);
+		boundariesTex.setStorage(1, grid.size.x, grid.size.y);
 	}
 
 	void reset()
@@ -52,17 +55,20 @@ struct FluidState
 		velocityY.clear();
 		pressure.clear();
 		divergenceTex.template clearLevel<Empty::gl::DataFormat::Red, Empty::gl::DataType::Float>(0);
+		boundariesTex.template clearLevel<Empty::gl::DataFormat::RedInt, Empty::gl::DataType::Byte>(0);
 		inkDensity.clear();
 	}
 	
 	FluidGridParameters grid;
 	FluidPhysicalProperties physics;
+	Empty::math::vec2 exteriorVelocity;
 
 	// Fields we need
 	BufferedScalarField velocityX;
 	BufferedScalarField velocityY;
 	BufferedScalarField pressure;
 	GPUScalarField divergenceTex;
+	Empty::gl::Texture<Empty::gl::TextureTarget::Texture2D, Empty::gl::TextureFormat::Red8ui> boundariesTex;
 
 	// Fields we don't need but are cool
 	BufferedScalarField inkDensity;

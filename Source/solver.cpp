@@ -48,6 +48,33 @@ constexpr int entryPointWorkGroupY = 32;
 // Classes representing fluid simulation steps
 // *******************************************
 
+struct FluidSim::BoundariesStep
+{
+	BoundariesStep()
+		: boundariesProgram("Boundaries program")
+	{
+		boundariesProgram.attachFile(ShaderType::Compute, "shaders/sim/make_boundaries.glsl", "Boundaries shader");
+		if (!boundariesProgram.build())
+		{
+			FATAL("Could not build boundaries program:\n" << boundariesProgram.getLog());
+		}
+	}
+
+	void compute(FluidState& fluidState)
+	{
+		Context& context = Context::get();
+
+		boundariesProgram.uniform("uExteriorVelocity", fluidState.exteriorVelocity);
+		boundariesProgram.registerTexture("uBoundariesTex", fluidState.boundariesTex, false);
+		context.bind(fluidState.boundariesTex.getLevel(0), 0, AccessPolicy::WriteOnly, TextureFormat::Red8ui);
+
+		context.setShaderProgram(boundariesProgram);
+		context.dispatchCompute(std::max(fluidState.grid.size.x, fluidState.grid.size.y) / 32, 4, 1);
+	}
+
+	Empty::gl::ShaderProgram boundariesProgram;
+};
+
 struct FluidSim::AdvectionStep
 {
 	AdvectionStep(Shader& entryPointShader)
@@ -456,6 +483,7 @@ FluidSim::FluidSim(Empty::math::uvec2 gridSize)
 	Empty::math::uvec3 dispatch(gridSize.x / entryPointWorkGroupX, gridSize.y / entryPointWorkGroupY, 1);
 	_entryPointIndirectDispatchBuffer.setStorage(sizeof(dispatch), BufferUsage::StaticDraw, dispatch);
 
+	_boundariesStep = std::make_unique<BoundariesStep>();
 	_advectionStep = std::make_unique<AdvectionStep>(_entryPointShader);
 	_diffusionStep = std::make_unique<DiffusionStep>(gridSize);
 	_forcesStep = std::make_unique<ForcesStep>(_entryPointShader);
@@ -503,6 +531,9 @@ void FluidSim::advance(FluidState& fluidState, float dt)
 	for (auto& pair : _hooks)
 		if (pair.second.second == FluidSimHookStage::Start)
 			pair.second.first(fluidState, dt);
+
+	context.memoryBarrier(MemoryBarrierType::ShaderImageAccess);
+	_boundariesStep->compute(fluidState);
 
 	if (runAdvection)
 	{

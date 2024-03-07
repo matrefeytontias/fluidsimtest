@@ -24,28 +24,44 @@ void debugCallback(DebugMessageSource source, DebugMessageType type, DebugMessag
 	std::cout << Empty::utils::name(source) << " (" << Empty::utils::name(type) << ", " << Empty::utils::name(severity) << "): " << text << std::endl;
 }
 
-TextureInfo selectDebugTexture(FluidState& fluidState, int whichDebugTexture)
-{
-	switch (whichDebugTexture)
-	{
-	case 0:
-		return fluidState.velocityX.getInput();
-	case 1:
-		return fluidState.velocityY.getInput();
-	case 2:
-		return fluidState.pressure.getInput();
-	case 3:
-		return fluidState.divergenceTex;
-	default:
-		FATAL("invalid requested debug texture");
-	}
-}
-
-void displayTexture(ShaderProgram& debugDrawProgram, const TextureInfo&& texture)
+void displayTexture(ShaderProgram& debugDrawProgram, FluidState& fluidState, int whichDebugTexture)
 {
 	Context& context = Context::get();
 
-	debugDrawProgram.registerTexture("uTexture", texture);
+	TextureInfo texture;
+	bool intTexture = false;
+
+	switch (whichDebugTexture)
+	{
+	case 0:
+		texture = fluidState.velocityX.getInput();
+		break;
+	case 1:
+		texture = fluidState.velocityY.getInput();
+		break;
+	case 2:
+		texture = fluidState.pressure.getInput();
+		break;
+	case 3:
+		texture = fluidState.divergenceTex;
+		break;
+	case 4:
+		texture = fluidState.boundariesTex;
+		intTexture = true;
+		break;
+	case 5:
+		texture = fluidState.inkDensity.getInput();
+		break;
+	default:
+		FATAL("invalid requested debug texture");
+	}
+
+	if (intTexture)
+		debugDrawProgram.registerTexture("uIntTexture", texture);
+	else
+		debugDrawProgram.registerTexture("uTexture", texture);
+	
+	debugDrawProgram.uniform("uUseIntTexture", intTexture);
 
 	context.setShaderProgram(debugDrawProgram);
 	context.drawArrays(PrimitiveType::Triangles, 0, 6);
@@ -92,12 +108,12 @@ int _main(int argc, char* argv[])
 	debugDrawProgram.attachFile(ShaderType::Fragment, "shaders/draw/debug_fragment.glsl", "Debug draw fragment");
 	debugDrawProgram.build();
 	debugDrawProgram.uniform("uTextureSizeOverScreenSize", Empty::math::vec2(grid.size) * renderParams.cellSizeInPx / Empty::math::vec2(context.frameWidth, context.frameHeight));
-	debugDrawProgram.uniform("uColorScale", simControls.colorScale);
+		debugDrawProgram.uniform("uColorScale", simControls.colorScale);
 
 	auto debugTextureLambda = [&simControls, &debugDrawProgram](FluidState& fluidState, float dt)
 		{
 			if (simControls.displayDebugTexture)
-				displayTexture(debugDrawProgram, selectDebugTexture(fluidState, simControls.whichDebugTexture));
+				displayTexture(debugDrawProgram, fluidState, simControls.whichDebugTexture);
 		};
 
 	simControls.debugTextureLambdaHookId = fluidSim.registerHook(debugTextureLambda, FluidSimHookStage::Start);
@@ -139,7 +155,7 @@ int _main(int argc, char* argv[])
 		{
 			// Only display the debug texture
 			if (simControls.displayDebugTexture)
-				displayTexture(debugDrawProgram, selectDebugTexture(fluidState, simControls.whichDebugTexture));
+				displayTexture(debugDrawProgram, fluidState, simControls.whichDebugTexture);
 		}
 
 		// Display it
@@ -151,8 +167,8 @@ int _main(int argc, char* argv[])
 				ImColor(0, 255, 0));
 
 			if (!simControls.displayDebugTexture)
-				displayTexture(debugDrawProgram, fluidState.inkDensity.getInput().getInfo());
-			}
+				displayTexture(debugDrawProgram, fluidState, 5); // ink texture
+		}
 
 		// ImGui::ShowDemoWindow();
 

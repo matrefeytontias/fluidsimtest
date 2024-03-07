@@ -25,8 +25,8 @@ struct BufferedField
 		{
 			fields[i].setStorage(1, size.x, size.y);
 			fields[i].template clearLevel<Format, DataType::Float>(0);
-			fields[i].setParameter<TextureParam::WrapS>(TextureParamValue::ClampToEdge);
-			fields[i].setParameter<TextureParam::WrapT>(TextureParamValue::ClampToEdge);
+			fields[i].setParameter<TextureParam::WrapS>(TextureParamValue::ClampToBorder);
+			fields[i].setParameter<TextureParam::WrapT>(TextureParamValue::ClampToBorder);
 		}
 	}
 
@@ -43,6 +43,17 @@ struct BufferedField
 	auto& getOutput() { return fields[writingBackBuffer ? 1 : 0]; }
 
 	void swap() { writingBackBuffer = !writingBackBuffer; }
+
+	/*
+	* Set a boundary value. This will only record the same number of components
+	* that the field itself has (eg a one component field won't have a four component
+	* boundary value). This is implemented using the border color.
+	*/
+	void setBoundaryValue(Empty::math::vec4 boundary)
+	{
+		fields[0].template setParameter<Empty::gl::TextureParam::BorderColor>(boundary);
+		fields[1].template setParameter<Empty::gl::TextureParam::BorderColor>(boundary);
+	}
 
 private:
 	Field fields[2];

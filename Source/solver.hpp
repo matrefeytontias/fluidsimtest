@@ -59,6 +59,7 @@ private:
 
 	Empty::gl::Buffer _entryPointIndirectDispatchBuffer;
 
+	struct BoundariesStep;
 	struct AdvectionStep;
 	struct DiffusionStep;
 	struct ForcesStep;
@@ -66,6 +67,7 @@ private:
 	struct PressureStep;
 	struct ProjectionStep;
 
+	std::unique_ptr<BoundariesStep> _boundariesStep;
 	std::unique_ptr<AdvectionStep> _advectionStep;
 	std::unique_ptr<DiffusionStep> _diffusionStep;
 	std::unique_ptr<ForcesStep> _forcesStep;
