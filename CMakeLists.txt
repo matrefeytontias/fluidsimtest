@@ -37,7 +37,8 @@ set(RESOURCES
     shaders/sim/projection.glsl
     # Drawing shaders
     shaders/draw/debug_vertex.glsl
-    shaders/draw/debug_fragment.glsl)
+    shaders/draw/debug_fragment.glsl
+    shaders/draw/mouse_vector_vertex.glsl)
 target_sources(FluidSimTest PRIVATE ${RESOURCES})
 source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR}/shaders PREFIX Shaders FILES ${RESOURCES})
 

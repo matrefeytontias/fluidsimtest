@@ -26,12 +26,17 @@ struct SimulationControls
 struct FluidSimRenderParameters
 {
 	FluidSimRenderParameters(int frameWidth, int frameHeight, int gridWidth, int gridHeight, float cellSizeInPx)
-		: cellSizeInPx(cellSizeInPx)
-	{
-		topLeftCorner = Empty::math::vec2(frameWidth - gridWidth * cellSizeInPx, frameHeight - gridHeight * cellSizeInPx) * 0.5f;
-	}
+		: frame(frameWidth, frameHeight)
+		, topLeftCorner((frameWidth - gridWidth * cellSizeInPx) * 0.5, (frameHeight - gridHeight * cellSizeInPx) * 0.5f)
+		, cellSizeInPx(cellSizeInPx)
+	{ }
+
+	Empty::math::vec2 frame;
 	Empty::math::vec2 topLeftCorner;
 	float cellSizeInPx;
+	float mouseVectorScale = 0.01f;
 };
 
-void doGUI(FluidSim& fluidSim, FluidState& fluidState, SimulationControls& simControls, Empty::gl::ShaderProgram& debugDrawProgram, float dt);
+void doGUI(FluidSim& fluidSim, FluidState& fluidState, SimulationControls& simControls, FluidSimRenderParameters& renderParams, Empty::gl::ShaderProgram& debugDrawProgram, float dt);
+void displayTexture(Empty::gl::ShaderProgram& debugDrawProgram, FluidState& fluidState, int whichDebugTexture);
+void drawVelocityUnderMouse(Empty::math::vec2 mousePos, FluidState& fluidState, Empty::gl::ShaderProgram& mouseVectorProgram, const FluidSimRenderParameters& renderParams);

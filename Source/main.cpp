@@ -24,49 +24,6 @@ void debugCallback(DebugMessageSource source, DebugMessageType type, DebugMessag
 	std::cout << Empty::utils::name(source) << " (" << Empty::utils::name(type) << ", " << Empty::utils::name(severity) << "): " << text << std::endl;
 }
 
-void displayTexture(ShaderProgram& debugDrawProgram, FluidState& fluidState, int whichDebugTexture)
-{
-	Context& context = Context::get();
-
-	TextureInfo texture;
-	bool intTexture = false;
-
-	switch (whichDebugTexture)
-	{
-	case 0:
-		texture = fluidState.velocityX.getInput();
-		break;
-	case 1:
-		texture = fluidState.velocityY.getInput();
-		break;
-	case 2:
-		texture = fluidState.pressure.getInput();
-		break;
-	case 3:
-		texture = fluidState.divergenceTex;
-		break;
-	case 4:
-		texture = fluidState.boundariesTex;
-		intTexture = true;
-		break;
-	case 5:
-		texture = fluidState.inkDensity.getInput();
-		break;
-	default:
-		FATAL("invalid requested debug texture");
-	}
-
-	if (intTexture)
-		debugDrawProgram.registerTexture("uIntTexture", texture);
-	else
-		debugDrawProgram.registerTexture("uTexture", texture);
-	
-	debugDrawProgram.uniform("uUseIntTexture", intTexture);
-
-	context.setShaderProgram(debugDrawProgram);
-	context.drawArrays(PrimitiveType::Triangles, 0, 6);
-}
-
 int _main(int argc, char* argv[])
 {
 	Context& context = Context::get();
@@ -98,17 +55,26 @@ int _main(int argc, char* argv[])
 	simControls.impulse.radius = 40.f;
 	simControls.impulse.inkAmount = 20.f;
 
+	VertexArray debugVAO("Debug VAO");
+	context.bind(debugVAO);
+
+	// Velocity under mouse draw
+	const char mouseVectorFragmentSource[] = "#version 450\n"
+		"out vec4 fFragColor; void main() { fFragColor = vec4(1.); }";
+	ShaderProgram mouseVectorProgram("Mouse vector program");
+	mouseVectorProgram.attachFile(ShaderType::Vertex, "shaders/draw/mouse_vector_vertex.glsl", "Mouse vector vertex");
+	mouseVectorProgram.attachSource(ShaderType::Fragment, mouseVectorFragmentSource, "Mouse vector fragment");
+	mouseVectorProgram.build();
+
 	// Debug texture draw
 	FluidSimRenderParameters renderParams(context.frameWidth, context.frameHeight, grid.size.x, grid.size.y, 4.f);
 
-	VertexArray debugVAO("Debug VAO");
-	context.bind(debugVAO);
 	ShaderProgram debugDrawProgram("Debug draw program");
 	debugDrawProgram.attachFile(ShaderType::Vertex, "shaders/draw/debug_vertex.glsl", "Debug draw vertex");
 	debugDrawProgram.attachFile(ShaderType::Fragment, "shaders/draw/debug_fragment.glsl", "Debug draw fragment");
 	debugDrawProgram.build();
 	debugDrawProgram.uniform("uTextureSizeOverScreenSize", Empty::math::vec2(grid.size) * renderParams.cellSizeInPx / Empty::math::vec2(context.frameWidth, context.frameHeight));
-		debugDrawProgram.uniform("uColorScale", simControls.colorScale);
+	debugDrawProgram.uniform("uColorScale", simControls.colorScale);
 
 	auto debugTextureLambda = [&simControls, &debugDrawProgram](FluidState& fluidState, float dt)
 		{
@@ -126,12 +92,14 @@ int _main(int argc, char* argv[])
 		Empty::math::vec2 mouseNow = ImGui::GetMousePos();
 		float dt = static_cast<float>(now - then);
 
-		doGUI(fluidSim, fluidState, simControls, debugDrawProgram, dt);
+		doGUI(fluidSim, fluidState, simControls, renderParams, debugDrawProgram, dt);
 
 		/// Advance simulation
 
 		if (!simControls.pauseSimulation || simControls.runOneStep)
 		{
+			float simdt = simControls.runOneStep ? 1 / 60.f : dt;
+
 			// Apply an impulse and inject ink when the left mouse button is down,
 			// or no ink if the right mouse button is down
 			bool rightMouseDown = ImGui::IsMouseDown(ImGuiMouseButton_Right);
@@ -144,10 +112,10 @@ int _main(int argc, char* argv[])
 				simControls.impulse.position.y = fluidState.grid.size.y - simControls.impulse.position.y;
 
 				context.memoryBarrier(MemoryBarrierType::ShaderImageAccess);
-				fluidSim.applyForces(fluidState, simControls.impulse, rightMouseDown, dt);
+				fluidSim.applyForces(fluidState, simControls.impulse, rightMouseDown, simdt);
 			}
 
-			fluidSim.advance(fluidState, dt);
+			fluidSim.advance(fluidState, simdt);
 
 			simControls.runOneStep = false;
 		}
@@ -169,6 +137,9 @@ int _main(int argc, char* argv[])
 			if (!simControls.displayDebugTexture)
 				displayTexture(debugDrawProgram, fluidState, 5); // ink texture
 		}
+
+		// Draw the velocity value at mouse cursor
+		drawVelocityUnderMouse(mouseNow, fluidState, mouseVectorProgram, renderParams);
 
 		// ImGui::ShowDemoWindow();
 

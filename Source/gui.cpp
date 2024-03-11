@@ -3,7 +3,9 @@
 #include <GLFW/glfw3.h>
 #include <imgui.h>
 
-void doGUI(FluidSim& fluidSim, FluidState& fluidState, SimulationControls& simControls, Empty::gl::ShaderProgram& debugDrawProgram, float dt)
+#include "Context.h"
+
+void doGUI(FluidSim& fluidSim, FluidState& fluidState, SimulationControls& simControls, FluidSimRenderParameters& renderParams, Empty::gl::ShaderProgram& debugDrawProgram, float dt)
 {
 	if (ImGui::Begin("Fluid simulation", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
 	{
@@ -42,6 +44,7 @@ void doGUI(FluidSim& fluidSim, FluidState& fluidState, SimulationControls& simCo
 		ImGui::DragFloat("Ink injection", &simControls.impulse.inkAmount, 0.5f, 0.f, 50.f);
 		ImGui::Separator();
 		ImGui::TextDisabled("Other parameters");
+		ImGui::DragFloat("Mouse vector scale", &renderParams.mouseVectorScale, 0.001f, 0.f, 1.f);
 		if (ImGui::DragFloat2("Exterior velocity", fluidState.exteriorVelocity))
 		{
 			fluidState.velocityX.setBoundaryValue(fluidState.exteriorVelocity.xxxx());
@@ -58,4 +61,70 @@ void doGUI(FluidSim& fluidSim, FluidState& fluidState, SimulationControls& simCo
 			debugDrawProgram.uniform("uColorScale", simControls.colorScale);
 	}
 	ImGui::End();
+}
+
+void displayTexture(Empty::gl::ShaderProgram& debugDrawProgram, FluidState& fluidState, int whichDebugTexture)
+{
+	Context& context = Context::get();
+
+	Empty::gl::TextureInfo texture;
+	bool intTexture = false;
+
+	switch (whichDebugTexture)
+	{
+	case 0:
+		texture = fluidState.velocityX.getInput();
+		break;
+	case 1:
+		texture = fluidState.velocityY.getInput();
+		break;
+	case 2:
+		texture = fluidState.pressure.getInput();
+		break;
+	case 3:
+		texture = fluidState.divergenceTex;
+		break;
+	case 4:
+		texture = fluidState.boundariesTex;
+		intTexture = true;
+		break;
+	case 5:
+		texture = fluidState.inkDensity.getInput();
+		break;
+	default:
+		FATAL("invalid requested debug texture");
+	}
+
+	if (intTexture)
+		debugDrawProgram.registerTexture("uIntTexture", texture);
+	else
+		debugDrawProgram.registerTexture("uTexture", texture);
+
+	debugDrawProgram.uniform("uUseIntTexture", intTexture);
+
+	context.setShaderProgram(debugDrawProgram);
+	context.drawArrays(Empty::gl::PrimitiveType::Triangles, 0, 6);
+}
+
+void drawVelocityUnderMouse(Empty::math::vec2 mousePos, FluidState& fluidState, Empty::gl::ShaderProgram& mouseVectorProgram, const FluidSimRenderParameters& renderParams)
+{
+	Context& context = Context::get();
+
+	Empty::math::vec2 mouseUV = (mousePos - renderParams.topLeftCorner) / (Empty::math::vec2(fluidState.grid.size) * renderParams.cellSizeInPx);
+	mouseUV.y = 1.f - mouseUV.y;
+
+	if (mouseUV.x < 0 || mouseUV.x > 1 || mouseUV.y < 0 || mouseUV.y > 1)
+		return;
+
+	Empty::math::vec2 bottomLeft = renderParams.topLeftCorner / renderParams.frame;
+
+	mouseVectorProgram.registerTexture("uVelocityX", fluidState.velocityX.getInput());
+	mouseVectorProgram.registerTexture("uVelocityY", fluidState.velocityY.getInput());
+	mouseVectorProgram.uniform("uTextureSizeOverScreenSize", Empty::math::vec2(fluidState.grid.size) * renderParams.cellSizeInPx / renderParams.frame);
+	mouseVectorProgram.uniform("uBottomLeftCornerUV", bottomLeft);
+	mouseVectorProgram.uniform("uMouseUV", mouseUV);
+	mouseVectorProgram.uniform("uVelocityScale", renderParams.mouseVectorScale);
+
+	context.setShaderProgram(mouseVectorProgram);
+	context.drawArrays(Empty::gl::PrimitiveType::Lines, 0, 6);
 }
