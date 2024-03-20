@@ -42,10 +42,12 @@ struct FluidState
 		, velocityY{ "Velocity Y", grid.size }
 		, pressure{ "Pressure", grid.size }
 		, divergenceTex("Divergence")
+		, divergenceCheckTex("Divergence zero check")
 		, boundariesTex("Boundaries")
 		, inkDensity{ "Ink density", grid.size }
 	{
 		divergenceTex.setStorage(1, grid.size.x, grid.size.y);
+		divergenceCheckTex.setStorage(1, grid.size.x, grid.size.y);
 		boundariesTex.setStorage(1, grid.size.x, grid.size.y);
 	}
 
@@ -55,6 +57,7 @@ struct FluidState
 		velocityY.clear();
 		pressure.clear();
 		divergenceTex.template clearLevel<Empty::gl::DataFormat::Red, Empty::gl::DataType::Float>(0);
+		divergenceCheckTex.template clearLevel<Empty::gl::DataFormat::Red, Empty::gl::DataType::Float>(0);
 		boundariesTex.template clearLevel<Empty::gl::DataFormat::RedInt, Empty::gl::DataType::Byte>(0);
 		inkDensity.clear();
 	}
@@ -68,6 +71,7 @@ struct FluidState
 	BufferedScalarField velocityY;
 	BufferedScalarField pressure;
 	GPUScalarField divergenceTex;
+	GPUScalarField divergenceCheckTex;
 	Empty::gl::Texture<Empty::gl::TextureTarget::Texture2D, Empty::gl::TextureFormat::Red8ui> boundariesTex;
 
 	// Fields we don't need but are cool

@@ -32,6 +32,7 @@ void doGUI(FluidSim& fluidSim, FluidState& fluidState, SimulationControls& simCo
 		ImGui::TextDisabled("Jacobi solver parameters");
 		ImGui::DragInt("Diffusion Jacobi steps", &fluidSim.diffusionJacobiSteps, 1, 1);
 		ImGui::DragInt("Pressure Jacobi steps", &fluidSim.pressureJacobiSteps, 1, 1);
+		ImGui::Checkbox("Reuse pressure from last step", &fluidSim.reuseLastPressure);
 		ImGui::Separator();
 		ImGui::TextDisabled("Fluid physics properties");
 		ImGui::SliderFloat("Grid cell size (m)", &fluidState.grid.cellSize, 0.0001f, 1.f);
@@ -53,7 +54,7 @@ void doGUI(FluidSim& fluidSim, FluidState& fluidState, SimulationControls& simCo
 		ImGui::Separator();
 		ImGui::TextDisabled("Debug texture display");
 		ImGui::Checkbox("Display debug texture", &simControls.displayDebugTexture);
-		ImGui::Combo("Display which", &simControls.whichDebugTexture, "Velocity X\0Velocity Y\0Pressure\0Velocity divergence\0Boundaries\0");
+		ImGui::Combo("Display which", &simControls.whichDebugTexture, "Velocity X\0Velocity Y\0Pressure\0Velocity divergence\0Divergence zero check\0Boundaries\0");
 		if (ImGui::Combo("Display when", &simControls.whenDebugTexture, "Start of frame\0After advection\0After diffusion\0After divergence\0After pressure computation\0After projection\0"))
 			fluidSim.modifyHookStage(simControls.debugTextureLambdaHookId, static_cast<FluidSimHookStage>(simControls.whenDebugTexture));
 
@@ -85,10 +86,13 @@ void displayTexture(Empty::gl::ShaderProgram& debugDrawProgram, FluidState& flui
 		texture = fluidState.divergenceTex;
 		break;
 	case 4:
+		texture = fluidState.divergenceCheckTex;
+		break;
+	case 5:
 		texture = fluidState.boundariesTex;
 		intTexture = true;
 		break;
-	case 5:
+	case 6:
 		texture = fluidState.inkDensity.getInput();
 		break;
 	default:

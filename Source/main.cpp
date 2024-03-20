@@ -78,6 +78,7 @@ int _main(int argc, char* argv[])
 
 	auto debugTextureLambda = [&simControls, &debugDrawProgram](FluidState& fluidState, float dt)
 		{
+			Context::get().memoryBarrier(MemoryBarrierType::ShaderImageAccess);
 			if (simControls.displayDebugTexture)
 				displayTexture(debugDrawProgram, fluidState, simControls.whichDebugTexture);
 		};
@@ -135,7 +136,7 @@ int _main(int argc, char* argv[])
 				ImColor(0, 255, 0));
 
 			if (!simControls.displayDebugTexture)
-				displayTexture(debugDrawProgram, fluidState, 5); // ink texture
+				displayTexture(debugDrawProgram, fluidState, 6); // ink texture
 		}
 
 		// Draw the velocity value at mouse cursor

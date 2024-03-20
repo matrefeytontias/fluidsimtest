@@ -349,7 +349,7 @@ struct FluidSim::DivergenceStep
 		divergenceProgram.build();
 	}
 
-	void compute(FluidState& fluidState)
+	void compute(FluidState& fluidState, GPUScalarField& tex)
 	{
 		const auto& params = fluidState.grid;
 
@@ -358,16 +358,18 @@ struct FluidSim::DivergenceStep
 		auto& velocityXTex = fluidState.velocityX.getInput();
 		auto& velocityYTex = fluidState.velocityY.getInput();
 
-		divergenceProgram.uniform("uHalfOneOverDx", 1.f / (2.f * params.cellSize));
+		divergenceProgram.uniform("uOneOverDx", 1.f / params.cellSize);
 		divergenceProgram.registerTexture("uVelocityX", velocityXTex, false);
 		divergenceProgram.registerTexture("uVelocityY", velocityYTex, false);
-		divergenceProgram.registerTexture("uDivergence", fluidState.divergenceTex, false);
+		divergenceProgram.registerTexture("uDivergence", tex, false);
 		context.bind(velocityXTex.getLevel(0), allVelocityXBinding, AccessPolicy::ReadOnly, GPUScalarField::Format);
 		context.bind(velocityYTex.getLevel(0), allVelocityYBinding, AccessPolicy::ReadOnly, GPUScalarField::Format);
-		context.bind(fluidState.divergenceTex.getLevel(0), divergenceOutBinding, AccessPolicy::WriteOnly, GPUScalarField::Format);
+		context.bind(tex.getLevel(0), divergenceOutBinding, AccessPolicy::WriteOnly, GPUScalarField::Format);
 
 		context.setShaderProgram(divergenceProgram);
 		context.dispatchComputeIndirect();
+
+		// no need to swap since the divergence texture is not buffered
 	}
 
 	Empty::gl::ShaderProgram divergenceProgram;
@@ -380,11 +382,12 @@ struct FluidSim::PressureStep
 	{
 	}
 
-	void compute(ShaderProgram& jacobiProgram, FluidState& fluidState, int jacobiIterations)
+	void compute(ShaderProgram& jacobiProgram, FluidState& fluidState, int jacobiIterations, bool reuseLastPressure)
 	{
 		const auto& params = fluidState.grid;
 		Context& context = Context::get();
 
+		if (!reuseLastPressure)
 		fluidState.pressure.clear();
 
 		jacobi.init(fluidState.divergenceTex, fluidState.pressure, 0, 1, 2, 3, jacobiIterations);
@@ -438,7 +441,7 @@ struct FluidSim::ProjectionStep
 		auto& velocityYTex = fluidState.velocityY.getInput();
 		auto& pressureTex = fluidState.pressure.getInput();
 
-		projectionProgram.uniform("uHalfOneOverDx", 1.f / (2.f * params.cellSize));
+		projectionProgram.uniform("uOneOverDx", 1.f / params.cellSize);
 		projectionProgram.registerTexture("uVelocityX", velocityXTex, false);
 		projectionProgram.registerTexture("uVelocityY", velocityYTex, false);
 		projectionProgram.registerTexture("uPressure", pressureTex, false);
@@ -462,8 +465,9 @@ struct FluidSim::ProjectionStep
 FluidSim::FluidSim(Empty::math::uvec2 gridSize)
 	: diffusionJacobiSteps(100)
 	, pressureJacobiSteps(100)
+	, reuseLastPressure(false)
 	, runAdvection(true)
-	, runDiffusion(true)
+	, runDiffusion(false)
 	, runDivergence(true)
 	, runPressure(true)
 	, runProjection(true)
@@ -532,56 +536,60 @@ void FluidSim::advance(FluidState& fluidState, float dt)
 		if (pair.second.second == FluidSimHookStage::Start)
 			pair.second.first(fluidState, dt);
 
-	context.memoryBarrier(MemoryBarrierType::ShaderImageAccess);
-	_boundariesStep->compute(fluidState);
+	// context.memoryBarrier(MemoryBarrierType::ShaderImageAccess);
+	// _boundariesStep->compute(fluidState);
 
 	if (runAdvection)
 	{
 		context.memoryBarrier(MemoryBarrierType::ShaderImageAccess);
 		_advectionStep->compute(fluidState, dt);
+	}
 
 		for (auto& pair : _hooks)
 			if (pair.second.second == FluidSimHookStage::AfterAdvection)
 				pair.second.first(fluidState, dt);
-	}
 
 	if (runDiffusion)
 	{
 		context.memoryBarrier(MemoryBarrierType::ShaderImageAccess);
 		_diffusionStep->compute(_jacobiProgram, fluidState, dt, diffusionJacobiSteps);
+	}
 
 		for (auto& pair : _hooks)
 			if (pair.second.second == FluidSimHookStage::AfterDiffusion)
 				pair.second.first(fluidState, dt);
-	}
 
 	if (runDivergence)
 	{
 		context.memoryBarrier(MemoryBarrierType::ShaderImageAccess);
-		_divergenceStep->compute(fluidState);
+		_divergenceStep->compute(fluidState, fluidState.divergenceTex);
+	}
 
 		for (auto& pair : _hooks)
 			if (pair.second.second == FluidSimHookStage::AfterDivergence)
 				pair.second.first(fluidState, dt);
-	}
 
 	if (runPressure)
 	{
 		context.memoryBarrier(MemoryBarrierType::ShaderImageAccess);
-		_pressureStep->compute(_jacobiProgram, fluidState, pressureJacobiSteps);
+		_pressureStep->compute(_jacobiProgram, fluidState, pressureJacobiSteps, reuseLastPressure);
+	}
 
 		for (auto& pair : _hooks)
 			if (pair.second.second == FluidSimHookStage::AfterPressure)
 				pair.second.first(fluidState, dt);
-	}
 
 	if (runProjection)
 	{
 		context.memoryBarrier(MemoryBarrierType::ShaderImageAccess);
 		_projectionStep->compute(fluidState);
+	}
+
+	// Re-compute divergence to check that it is in fact 0
+	context.memoryBarrier(MemoryBarrierType::ShaderImageAccess);
+	_divergenceStep->compute(fluidState, fluidState.divergenceCheckTex);
 
 		for (auto& pair : _hooks)
 			if (pair.second.second == FluidSimHookStage::AfterProjection)
 				pair.second.first(fluidState, dt);
 	}
-}

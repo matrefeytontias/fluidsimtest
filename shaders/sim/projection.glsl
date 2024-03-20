@@ -2,7 +2,7 @@
 
 layout(local_size_x = 32, local_size_y = 32) in;
 
-uniform float uHalfOneOverDx;
+uniform float uOneOverDx;
 
 layout(binding = 0, r32f) uniform restrict image2D uVelocityX;
 layout(binding = 1, r32f) uniform restrict image2D uVelocityY;
@@ -28,7 +28,7 @@ void main()
 		    pup = pright,
 		  pdown = imageLoad(uPressure, texel + ivec2( 0, -1)).r;
 
-	vec2 pressureGradientHalves = uHalfOneOverDx * vec2(pright - pleft, pup - pdown);
+	vec2 pressureGradientHalves = uOneOverDx * vec2(pright - pleft, pup - pdown);
 	
 	float oldx = imageLoad(uVelocityX, texel).r;
 	float oldy = imageLoad(uVelocityY, texel).r;

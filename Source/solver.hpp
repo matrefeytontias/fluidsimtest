@@ -43,6 +43,7 @@ struct FluidSim
 
 	int diffusionJacobiSteps;
 	int pressureJacobiSteps;
+	bool reuseLastPressure;
 
 	bool runAdvection;
 	bool runDiffusion;

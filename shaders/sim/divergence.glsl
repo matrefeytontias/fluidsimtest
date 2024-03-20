@@ -2,7 +2,7 @@
 
 layout(local_size_x = 32, local_size_y = 32) in;
 
-uniform float uHalfOneOverDx;
+uniform float uOneOverDx;
 
 layout(binding = 0, r32f) uniform restrict readonly image2D uVelocityX;
 layout(binding = 1, r32f) uniform restrict readonly image2D uVelocityY;
@@ -21,6 +21,6 @@ void main()
 		    yup = imageLoad(uVelocityY, texel + ivec2(0, 1)).r,
 		  ydown = imageLoad(uVelocityY, texel              ).r;
 
-	float divergence = (xright - xleft + yup - ydown) * uHalfOneOverDx;
+	float divergence = (xright - xleft + yup - ydown) * uOneOverDx;
 	imageStore(uDivergence, texel, vec4(divergence));
 }
