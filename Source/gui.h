@@ -27,7 +27,7 @@ struct FluidSimRenderParameters
 {
 	FluidSimRenderParameters(int frameWidth, int frameHeight, int gridWidth, int gridHeight, float cellSizeInPx)
 		: frame(frameWidth, frameHeight)
-		, topLeftCorner((frameWidth - gridWidth * cellSizeInPx) * 0.5, (frameHeight - gridHeight * cellSizeInPx) * 0.5f)
+		, topLeftCorner((frameWidth - gridWidth * cellSizeInPx) * 0.5f, (frameHeight - gridHeight * cellSizeInPx) * 0.5f)
 		, cellSizeInPx(cellSizeInPx)
 	{ }
 

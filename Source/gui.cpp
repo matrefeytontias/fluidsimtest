@@ -17,7 +17,7 @@ void doGUI(FluidSim& fluidSim, FluidState& fluidState, SimulationControls& simCo
 			simControls.pauseSimulation = !simControls.pauseSimulation;
 		if (ImGui::Button("Run one step (R)"))
 			simControls.runOneStep = true;
-		if (ImGui::IsKeyPressed(ImGuiKey_R) && !ImGui::GetIO().WantCaptureKeyboard)
+		if (ImGui::IsKeyPressed(ImGuiKey_R))
 			simControls.runOneStep = true;
 		if (ImGui::Button("Reset"))
 			fluidState.reset();
