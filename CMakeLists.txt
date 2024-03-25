@@ -30,6 +30,8 @@ set(RESOURCES
     # Fluid sim shaders
     shaders/sim/entry_point.glsl
     shaders/sim/advection.glsl
+    shaders/sim/boundary_pressure.glsl
+    shaders/sim/boundary_velocity.glsl
     shaders/sim/divergence.glsl
     shaders/sim/forces.glsl
     shaders/sim/jacobi.glsl

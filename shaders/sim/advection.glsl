@@ -19,7 +19,9 @@ layout(binding = 3, r32f) uniform restrict writeonly image2D uFieldOut;
 
 // Velocity X is staggered by velocityStagger.xy, while
 // velocity Y is staggered by velocityStagger.yx
-const vec2 velocityStagger = vec2(0.5, 0);
+
+// const vec2 velocityStagger = vec2(0.5, 0);
+const vec2 velocityStagger = vec2(0.); // TEST: collocated
 
 vec2 texelSpaceToGridSpace(ivec2 p, vec2 stagger)
 {
@@ -109,9 +111,9 @@ void compute(ivec2 texel, ivec2 outputTexel, bool applyBoundaryConditions, bool 
 	vec2 samplePosition = texelSpaceToGridSpace(texel, fieldStagger);
 	float newValue = interpolateField(gridSpaceToUV(traceBack(samplePosition), fieldStagger));
 
-	imageStore(uFieldOut, outputTexel, vec4(unused
+	imageStore(uFieldOut, outputTexel, vec4(/*unused
 		? 0.
 		: applyBoundaryConditions
 			? uBoundaryCondition * newValue
-			: newValue));
+			: */newValue));
 }

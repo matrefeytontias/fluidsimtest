@@ -27,9 +27,9 @@ constexpr int divergenceOutBinding = 2;
 
 constexpr int projectionPressureBinding = 2;
 
-const Empty::math::bvec2 anyStagger(true, true);
-const Empty::math::bvec2 xStagger(true, false);
-const Empty::math::bvec2 yStagger(false, true);
+// TEST: collocated
+const Empty::math::bvec2 xStagger(false, false);
+const Empty::math::bvec2 yStagger(false, false);
 const Empty::math::bvec2 noStagger(false, false);
 
 // f(boundary) + f(neighbour) = 0 -> f(boundary) = -f(neighbour)
@@ -51,28 +51,60 @@ constexpr int entryPointWorkGroupY = 32;
 struct FluidSim::BoundariesStep
 {
 	BoundariesStep()
-		: boundariesProgram("Boundaries program")
+		: pressureBoundariesProgram("Pressure boundaries program")
+		, velocityBoundariesProgram("Velocity boundaries program")
 	{
-		boundariesProgram.attachFile(ShaderType::Compute, "shaders/sim/make_boundaries.glsl", "Boundaries shader");
-		if (!boundariesProgram.build())
+		pressureBoundariesProgram.attachFile(ShaderType::Compute, "shaders/sim/boundary_pressure.glsl", "Pressure boundaries shader");
+		if (!pressureBoundariesProgram.build())
 		{
-			FATAL("Could not build boundaries program:\n" << boundariesProgram.getLog());
+			FATAL("Could not build pressure boundaries program:\n" << pressureBoundariesProgram.getLog());
+		}
+
+		velocityBoundariesProgram.attachFile(ShaderType::Compute, "shaders/sim/boundary_velocity.glsl", "velocity boundaries shader");
+		if (!velocityBoundariesProgram.build())
+		{
+			FATAL("Could not build velocity boundaries program:\n" << velocityBoundariesProgram.getLog());
 		}
 	}
 
-	void compute(FluidState& fluidState)
+	void computePressure(FluidState& fluidState)
 	{
 		Context& context = Context::get();
 
-		boundariesProgram.uniform("uExteriorVelocity", fluidState.exteriorVelocity);
-		boundariesProgram.registerTexture("uBoundariesTex", fluidState.boundariesTex, false);
-		context.bind(fluidState.boundariesTex.getLevel(0), 0, AccessPolicy::WriteOnly, TextureFormat::Red8ui);
+		pressureBoundariesProgram.registerTexture("uPressureIn", fluidState.pressure.getInput(), false);
+		pressureBoundariesProgram.registerTexture("uPressureOut", fluidState.pressure.getOutput(), false);
+		context.bind(fluidState.pressure.getInput().getLevel(0), 0, AccessPolicy::ReadOnly, GPUScalarField::Format);
+		context.bind(fluidState.pressure.getOutput().getLevel(0), 1, AccessPolicy::WriteOnly, GPUScalarField::Format);
 
-		context.setShaderProgram(boundariesProgram);
+		context.setShaderProgram(pressureBoundariesProgram);
 		context.dispatchCompute(std::max(fluidState.grid.size.x, fluidState.grid.size.y) / 32, 4, 1);
+
+		fluidState.pressure.swap();
 	}
 
-	Empty::gl::ShaderProgram boundariesProgram;
+	void computeVelocity(FluidState& fluidState)
+	{
+		Context& context = Context::get();
+
+		velocityBoundariesProgram.registerTexture("uVelocityXIn", fluidState.velocityX.getInput(), false);
+		velocityBoundariesProgram.registerTexture("uVelocityYIn", fluidState.velocityY.getInput(), false);
+		velocityBoundariesProgram.registerTexture("uVelocityXOut", fluidState.velocityX.getOutput(), false);
+		velocityBoundariesProgram.registerTexture("uVelocityYOut", fluidState.velocityY.getOutput(), false);
+
+		context.bind(fluidState.velocityX.getInput().getLevel(0), 0, AccessPolicy::ReadOnly, GPUScalarField::Format);
+		context.bind(fluidState.velocityY.getInput().getLevel(0), 1, AccessPolicy::ReadOnly, GPUScalarField::Format);
+		context.bind(fluidState.velocityX.getOutput().getLevel(0), 2, AccessPolicy::WriteOnly, GPUScalarField::Format);
+		context.bind(fluidState.velocityY.getOutput().getLevel(0), 3, AccessPolicy::WriteOnly, GPUScalarField::Format);
+
+		context.setShaderProgram(velocityBoundariesProgram);
+		context.dispatchCompute(std::max(fluidState.grid.size.x, fluidState.grid.size.y) / 32, 4, 1);
+
+		fluidState.velocityX.swap();
+		fluidState.velocityY.swap();
+	}
+
+	Empty::gl::ShaderProgram pressureBoundariesProgram;
+	Empty::gl::ShaderProgram velocityBoundariesProgram;
 };
 
 struct FluidSim::AdvectionStep
@@ -121,8 +153,8 @@ struct FluidSim::AdvectionStep
 				advectionProgram.registerTexture("uFieldOut", fieldOut, false);
 				context.bind(fieldOut.getLevel(0), advectionFieldOutBinding, AccessPolicy::WriteOnly, GPUScalarField::Format);
 
-				advectionProgram.uniform("uBoundaryCondition", boundaryCondition);
-				advectionProgram.uniform("uFieldStagger", stagger);
+				// advectionProgram.uniform("uBoundaryCondition", boundaryCondition);
+				// advectionProgram.uniform("uFieldStagger", stagger);
 
 				context.dispatchComputeIndirect();
 			};
@@ -269,7 +301,7 @@ struct FluidSim::DiffusionStep
 			float oneOverBeta = 1.f / (alpha + 4.f);
 			jacobiProgram.uniform("uAlpha", alpha);
 			jacobiProgram.uniform("uOneOverBeta", oneOverBeta);
-			jacobiProgram.uniform("uBoundaryCondition", staggeredNoSlipBoundaryCondition);
+			// jacobiProgram.uniform("uBoundaryCondition", staggeredNoSlipBoundaryCondition);
 		}
 
 		context.setShaderProgram(jacobiProgram);
@@ -278,9 +310,9 @@ struct FluidSim::DiffusionStep
 		{
 			if (i > 0)
 				context.memoryBarrier(MemoryBarrierType::ShaderImageAccess);
-			jacobiProgram.uniform("uFieldStagger", xStagger);
+			// jacobiProgram.uniform("uFieldStagger", xStagger);
 			jacobiX.step(jacobiProgram);
-			jacobiProgram.uniform("uFieldStagger", yStagger);
+			// jacobiProgram.uniform("uFieldStagger", yStagger);
 			jacobiY.step(jacobiProgram);
 		}
 
@@ -324,8 +356,8 @@ struct FluidSim::ForcesStep
 				context.bind(field.getLevel(0), forcesFieldBinding, AccessPolicy::ReadWrite, GPUScalarField::Format);
 
 				forcesProgram.uniform("uForceMagnitude", forceMagnitude);
-				forcesProgram.uniform("uBoundaryCondition", boundaryCondition);
-				forcesProgram.uniform("uFieldStagger", stagger);
+				// forcesProgram.uniform("uBoundaryCondition", boundaryCondition);
+				// forcesProgram.uniform("uFieldStagger", stagger);
 				context.dispatchComputeIndirect();
 			};
 
@@ -388,7 +420,7 @@ struct FluidSim::PressureStep
 		Context& context = Context::get();
 
 		if (!reuseLastPressure)
-		fluidState.pressure.clear();
+			fluidState.pressure.clear();
 
 		jacobi.init(fluidState.divergenceTex, fluidState.pressure, 0, 1, 2, 3, jacobiIterations);
 
@@ -398,8 +430,8 @@ struct FluidSim::PressureStep
 			float oneOverBeta = 1.f / 4.f;
 			jacobiProgram.uniform("uAlpha", alpha);
 			jacobiProgram.uniform("uOneOverBeta", oneOverBeta);
-			jacobiProgram.uniform("uBoundaryCondition", neumannBoundaryCondition);
-			jacobiProgram.uniform("uFieldStagger", noStagger);
+			// jacobiProgram.uniform("uBoundaryCondition", neumannBoundaryCondition);
+			// jacobiProgram.uniform("uFieldStagger", noStagger);
 		}
 
 		context.setShaderProgram(jacobiProgram);
@@ -545,9 +577,9 @@ void FluidSim::advance(FluidState& fluidState, float dt)
 		_advectionStep->compute(fluidState, dt);
 	}
 
-		for (auto& pair : _hooks)
-			if (pair.second.second == FluidSimHookStage::AfterAdvection)
-				pair.second.first(fluidState, dt);
+	for (auto& pair : _hooks)
+		if (pair.second.second == FluidSimHookStage::AfterAdvection)
+			pair.second.first(fluidState, dt);
 
 	if (runDiffusion)
 	{
@@ -555,9 +587,9 @@ void FluidSim::advance(FluidState& fluidState, float dt)
 		_diffusionStep->compute(_jacobiProgram, fluidState, dt, diffusionJacobiSteps);
 	}
 
-		for (auto& pair : _hooks)
-			if (pair.second.second == FluidSimHookStage::AfterDiffusion)
-				pair.second.first(fluidState, dt);
+	for (auto& pair : _hooks)
+		if (pair.second.second == FluidSimHookStage::AfterDiffusion)
+			pair.second.first(fluidState, dt);
 
 	if (runDivergence)
 	{
@@ -565,9 +597,9 @@ void FluidSim::advance(FluidState& fluidState, float dt)
 		_divergenceStep->compute(fluidState, fluidState.divergenceTex);
 	}
 
-		for (auto& pair : _hooks)
-			if (pair.second.second == FluidSimHookStage::AfterDivergence)
-				pair.second.first(fluidState, dt);
+	for (auto& pair : _hooks)
+		if (pair.second.second == FluidSimHookStage::AfterDivergence)
+			pair.second.first(fluidState, dt);
 
 	if (runPressure)
 	{
@@ -575,9 +607,9 @@ void FluidSim::advance(FluidState& fluidState, float dt)
 		_pressureStep->compute(_jacobiProgram, fluidState, pressureJacobiSteps, reuseLastPressure);
 	}
 
-		for (auto& pair : _hooks)
-			if (pair.second.second == FluidSimHookStage::AfterPressure)
-				pair.second.first(fluidState, dt);
+	for (auto& pair : _hooks)
+		if (pair.second.second == FluidSimHookStage::AfterPressure)
+			pair.second.first(fluidState, dt);
 
 	if (runProjection)
 	{
@@ -589,7 +621,7 @@ void FluidSim::advance(FluidState& fluidState, float dt)
 	context.memoryBarrier(MemoryBarrierType::ShaderImageAccess);
 	_divergenceStep->compute(fluidState, fluidState.divergenceCheckTex);
 
-		for (auto& pair : _hooks)
-			if (pair.second.second == FluidSimHookStage::AfterProjection)
-				pair.second.first(fluidState, dt);
-	}
+	for (auto& pair : _hooks)
+		if (pair.second.second == FluidSimHookStage::AfterProjection)
+			pair.second.first(fluidState, dt);
+}

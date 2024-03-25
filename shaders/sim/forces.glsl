@@ -17,9 +17,9 @@ void compute(ivec2 texel, ivec2 outputTexel, bool applyBoundaryConditions, bool 
 
 	float value = uForceMagnitude * factor + imageLoad(uField, texel).r;
 	
-	imageStore(uField, outputTexel, vec4(unused
+	imageStore(uField, outputTexel, vec4(/*unused
 		? 0.
 		: applyBoundaryConditions
 			? uBoundaryCondition * value
-			: value));
+			: */value));
 }

@@ -18,6 +18,7 @@ layout(r32f) uniform writeonly restrict image2D uFieldOut;
 // https://dl.acm.org/action/downloadSupplement?doi=10.1145%2F3528233.3530737&file=supplementary.pdf
 void compute(ivec2 texel, ivec2 outputTexel, bool applyBoundaryConditions, bool unused)
 {
+	// Field is 0 outside of the texture
 	float left = imageLoad(uFieldIn, texel + ivec2(-1,  0)).r,
 	     right = imageLoad(uFieldIn, texel + ivec2( 1,  0)).r,
 		    up = imageLoad(uFieldIn, texel + ivec2( 0,  1)).r,
@@ -26,9 +27,9 @@ void compute(ivec2 texel, ivec2 outputTexel, bool applyBoundaryConditions, bool 
 	
 	float value = (left + right + up + down + uAlpha * source) * uOneOverBeta;
 
-	imageStore(uFieldOut, outputTexel, vec4(unused
+	imageStore(uFieldOut, outputTexel, vec4(/*unused
 		? 0.
 		: applyBoundaryConditions
 			? uBoundaryCondition * value
-			: value));
+			: */value));
 }

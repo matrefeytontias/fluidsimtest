@@ -21,11 +21,13 @@ void main()
 	// the boundary on centered fields; the 0 row and column are
 	// unused. Texels also don't need an offset since they always
 	// compute their own value.
+	/*
 	bvec2 bBottomLeft = equal(texel, ivec2(uFieldStagger)), bTopRight = equal(texel, size - 1);
 	bvec2 isBoundaryTexel = bBottomLeft || bTopRight;
-	bool applyBoundaryConditions = !any(uFieldStagger) && any(isBoundaryTexel) || any(uFieldStagger && isBoundaryTexel);
+	bool applyBoundaryConditions = false; // !any(uFieldStagger) && any(isBoundaryTexel) || any(uFieldStagger && isBoundaryTexel);
 	ivec2 boundaryOffset = ivec2(bBottomLeft) - ivec2(bTopRight);
 	bool unused = any(lessThan(texel, ivec2(uFieldStagger)));
+	*/
 
-	compute(any(uFieldStagger) ? texel : texel + boundaryOffset, texel, applyBoundaryConditions, unused);
+	compute(texel, texel, false, false);
 }

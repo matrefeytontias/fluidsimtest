@@ -25,8 +25,8 @@ struct BufferedField
 		{
 			fields[i].setStorage(1, size.x, size.y);
 			fields[i].template clearLevel<Format, DataType::Float>(0);
-			fields[i].setParameter<TextureParam::WrapS>(TextureParamValue::ClampToBorder);
-			fields[i].setParameter<TextureParam::WrapT>(TextureParamValue::ClampToBorder);
+			fields[i].template setParameter<TextureParam::WrapS>(TextureParamValue::ClampToBorder);
+			fields[i].template setParameter<TextureParam::WrapT>(TextureParamValue::ClampToBorder);
 		}
 	}
 
