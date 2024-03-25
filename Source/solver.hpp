@@ -39,6 +39,7 @@ struct FluidSim
 	void unregisterHook(FluidSimHookId);
 
 	void applyForces(FluidState& fluidState, FluidSimMouseClickImpulse& impulse, bool velocityOnly, float dt);
+	void scrollGrid(FluidState &fluidState, Empty::math::ivec2 scroll);
 	void advance(FluidState& fluidState, float dt);
 
 	int diffusionJacobiSteps;
@@ -60,6 +61,7 @@ private:
 
 	Empty::gl::Buffer _entryPointIndirectDispatchBuffer;
 
+	struct GridScrollStep;
 	struct BoundariesStep;
 	struct AdvectionStep;
 	struct DiffusionStep;
@@ -68,6 +70,7 @@ private:
 	struct PressureStep;
 	struct ProjectionStep;
 
+	std::unique_ptr<GridScrollStep> _gridScrollStep;
 	std::unique_ptr<BoundariesStep> _boundariesStep;
 	std::unique_ptr<AdvectionStep> _advectionStep;
 	std::unique_ptr<DiffusionStep> _diffusionStep;

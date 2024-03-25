@@ -34,6 +34,7 @@ set(RESOURCES
     shaders/sim/boundary_velocity.glsl
     shaders/sim/divergence.glsl
     shaders/sim/forces.glsl
+    shaders/sim/grid_scroll.glsl
     shaders/sim/jacobi.glsl
     shaders/sim/make_boundaries.glsl
     shaders/sim/projection.glsl

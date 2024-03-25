@@ -48,6 +48,47 @@ constexpr int entryPointWorkGroupY = 32;
 // Classes representing fluid simulation steps
 // *******************************************
 
+struct FluidSim::GridScrollStep
+{
+	GridScrollStep()
+		: scrollProgram("Grid scroll program")
+	{
+		scrollProgram.attachFile(ShaderType::Compute, "shaders/sim/grid_scroll.glsl", "Grid scroll shader");
+		if (!scrollProgram.build())
+		{
+			FATAL("Could not build grid scroll program:\n" << scrollProgram.getLog());
+		}
+	}
+
+	void compute(FluidState& fluidState, Empty::math::ivec2 scroll)
+	{
+		Context& context = Context::get();
+
+		scrollProgram.uniform("uTexelScroll", scroll);
+		context.setShaderProgram(scrollProgram);
+
+		auto doScroll = [this, &context](BufferedScalarField& field)
+		{
+			auto& fieldIn = field.getInput();
+			scrollProgram.registerTexture("uFieldIn", fieldIn, false);
+			context.bind(fieldIn.getLevel(0), 0, AccessPolicy::ReadOnly, GPUScalarField::Format);
+
+			auto& fieldOut = field.getOutput();
+			scrollProgram.registerTexture("uFieldOut", fieldOut, false);
+			context.bind(fieldOut.getLevel(0), 1, AccessPolicy::WriteOnly, GPUScalarField::Format);
+
+			context.dispatchComputeIndirect();
+		};
+
+		doScroll(fluidState.velocityX);
+		doScroll(fluidState.velocityY);
+		doScroll(fluidState.pressure);
+		doScroll(fluidState.inkDensity);
+	}
+
+	ShaderProgram scrollProgram;
+};
+
 struct FluidSim::BoundariesStep
 {
 	BoundariesStep()
@@ -103,8 +144,8 @@ struct FluidSim::BoundariesStep
 		fluidState.velocityY.swap();
 	}
 
-	Empty::gl::ShaderProgram pressureBoundariesProgram;
-	Empty::gl::ShaderProgram velocityBoundariesProgram;
+	ShaderProgram pressureBoundariesProgram;
+	ShaderProgram velocityBoundariesProgram;
 };
 
 struct FluidSim::AdvectionStep
@@ -168,7 +209,7 @@ struct FluidSim::AdvectionStep
 		fluidState.inkDensity.swap();
 	}
 
-	Empty::gl::ShaderProgram advectionProgram;
+	ShaderProgram advectionProgram;
 };
 
 struct JacobiIterator
@@ -369,7 +410,7 @@ struct FluidSim::ForcesStep
 		// Don't swap textures since we read from and write to the same textures
 	}
 
-	Empty::gl::ShaderProgram forcesProgram;
+	ShaderProgram forcesProgram;
 };
 
 struct FluidSim::DivergenceStep
@@ -404,7 +445,7 @@ struct FluidSim::DivergenceStep
 		// no need to swap since the divergence texture is not buffered
 	}
 
-	Empty::gl::ShaderProgram divergenceProgram;
+	ShaderProgram divergenceProgram;
 };
 
 struct FluidSim::PressureStep
@@ -487,7 +528,7 @@ struct FluidSim::ProjectionStep
 		// Don't swap textures since we read from and write to the same textures
 	}
 
-	Empty::gl::ShaderProgram projectionProgram;
+	ShaderProgram projectionProgram;
 };
 
 // ***************************
@@ -519,6 +560,7 @@ FluidSim::FluidSim(Empty::math::uvec2 gridSize)
 	Empty::math::uvec3 dispatch(gridSize.x / entryPointWorkGroupX, gridSize.y / entryPointWorkGroupY, 1);
 	_entryPointIndirectDispatchBuffer.setStorage(sizeof(dispatch), BufferUsage::StaticDraw, dispatch);
 
+	_gridScrollStep = std::make_unique<GridScrollStep>();
 	_boundariesStep = std::make_unique<BoundariesStep>();
 	_advectionStep = std::make_unique<AdvectionStep>(_entryPointShader);
 	_diffusionStep = std::make_unique<DiffusionStep>(gridSize);
@@ -556,6 +598,12 @@ void FluidSim::applyForces(FluidState& fluidState, FluidSimMouseClickImpulse& im
 {
 	Context::get().bind(_entryPointIndirectDispatchBuffer, BufferTarget::DispatchIndirect);
 	_forcesStep->compute(fluidState, impulse, dt, velocityOnly);
+}
+
+void FluidSim::scrollGrid(FluidState& fluidState, Empty::math::ivec2 scroll)
+{
+	Context::get().bind(_entryPointIndirectDispatchBuffer, BufferTarget::DispatchIndirect);
+	_gridScrollStep->compute(fluidState, scroll);
 }
 
 void FluidSim::advance(FluidState& fluidState, float dt)

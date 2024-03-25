@@ -29,6 +29,12 @@ void doGUI(FluidSim& fluidSim, FluidState& fluidState, SimulationControls& simCo
 		ImGui::Checkbox("Projection", &fluidSim.runProjection);
 
 		ImGui::Separator();
+		ImGui::DragInt2("Grid scroll", simControls.gridScroll);
+		ImGui::SameLine();
+		if (ImGui::Button("Apply"))
+			fluidSim.scrollGrid(fluidState, simControls.gridScroll);
+
+		ImGui::Separator();
 		ImGui::TextDisabled("Jacobi solver parameters");
 		ImGui::DragInt("Diffusion Jacobi steps", &fluidSim.diffusionJacobiSteps, 1, 1);
 		ImGui::DragInt("Pressure Jacobi steps", &fluidSim.pressureJacobiSteps, 1, 1);

@@ -18,6 +18,8 @@ struct SimulationControls
 	float colorScale = 1.f;
 	float forceScale = 5.f;
 
+	Empty::math::ivec2 gridScroll = Empty::math::ivec2::zero;
+
 	FluidSimMouseClickImpulse impulse;
 
 	FluidSimHookId debugTextureLambdaHookId;
