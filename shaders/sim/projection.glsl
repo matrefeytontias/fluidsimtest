@@ -23,13 +23,12 @@ void main()
 
 	// Velocity X and Y texels are in different locations, so they each need a
 	// different half-pressure gradient. Both halves happen to share a texel.
-	// TEST: collocated
 	float pleft = imageLoad(uPressure, max(zero, texel + ivec2(-1,  0))).r,
-		 pright = imageLoad(uPressure, min(size, texel + ivec2( 1,  0))).r,
-		    pup = imageLoad(uPressure, min(size, texel + ivec2( 0,  1))).r,
+		 pright = imageLoad(uPressure, min(size, texel                )).r,
+		    pup = pright,
 		  pdown = imageLoad(uPressure, max(zero, texel + ivec2( 0, -1))).r;
 
-	vec2 pressureGradientHalves = uOneOverDx * vec2(pright - pleft, pup - pdown) * 0.5;
+	vec2 pressureGradientHalves = uOneOverDx * vec2(pright - pleft, pup - pdown);
 	
 	float oldx = imageLoad(uVelocityX, texel).r;
 	float oldy = imageLoad(uVelocityY, texel).r;
@@ -37,18 +36,18 @@ void main()
 	float newy = oldy - pressureGradientHalves.y;
 
 	// Boundary detection for each velocity field
-	bvec2 boundaryVelX = equal(texel, ivec2(0)) || equal(texel, size - 1);
-	bvec2 boundaryVelY = equal(texel, ivec2(0)) || equal(texel, size - 1);
+	bvec2 boundaryVelX = equal(texel, ivec2(1, 0)) || equal(texel, size - 1);
+	bvec2 boundaryVelY = equal(texel, ivec2(0, 1)) || equal(texel, size - 1);
 
 	// Velocity respects the staggered no-slip boundary condition
-	imageStore(uVelocityX, texel, vec4(/*texel.x == 0
+	imageStore(uVelocityX, texel, vec4(texel.x == 0
 		? 0.
-		: boundaryVelX.x
+		: /*boundaryVelX.x
 			? 0.
 			: */newx));
-	imageStore(uVelocityY, texel, vec4(/*texel.y == 0
+	imageStore(uVelocityY, texel, vec4(texel.y == 0
 		? 0.
-		: boundaryVelY.y
+		: /*boundaryVelY.y
 			? 0.
 			: */newy));
 }

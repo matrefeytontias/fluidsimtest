@@ -27,9 +27,9 @@ void compute(ivec2 texel, ivec2 outputTexel, bool applyBoundaryConditions, bool 
 	
 	float value = (left + right + up + down + uAlpha * source) * uOneOverBeta;
 
-	imageStore(uFieldOut, outputTexel, vec4(/*unused
+	imageStore(uFieldOut, outputTexel, vec4(unused
 		? 0.
-		: applyBoundaryConditions
+		: /*applyBoundaryConditions
 			? uBoundaryCondition * value
 			: */value));
 }
