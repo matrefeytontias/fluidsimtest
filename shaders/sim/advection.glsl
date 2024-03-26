@@ -33,18 +33,30 @@ vec3 gridSpaceToUV(vec3 p, vec3 stagger)
 	return (p * uGridParams.oneOverDx + stagger) * uGridParams.oneOverGridSize;
 }
 
+vec3 bilerpVelocity(vec3 position)
+{
+	vec3 velocity;
+	velocity.x = texture(uVelocityX, gridSpaceToUV(position, velocityStagger.xyy)).r;
+	velocity.y = texture(uVelocityY, gridSpaceToUV(position, velocityStagger.yxy)).r;
+	velocity.z = texture(uVelocityZ, gridSpaceToUV(position, velocityStagger.yyx)).r;
+	return velocity;
+}
+
+vec3 traceBack(vec3 position)
+{
+	return position - bilerpVelocity(position) * udt;
+}
+
+float interpolateField(vec3 uv)
+{
+	return texture(uFieldIn, uv).r;
+}
+
 void compute(ivec3 texel, ivec3 outputTexel, bool boundaryTexel)
 {
 	vec3 fieldStagger = ivec3(uFieldStagger) * 0.5;
 	vec3 samplePosition = texelSpaceToGridSpace(texel, fieldStagger);
+	float newValue = interpolateField(gridSpaceToUV(traceBack(samplePosition), fieldStagger));
 
-	vec3 velocity;
-	velocity.x = texture(uVelocityX, gridSpaceToUV(samplePosition, velocityStagger.xyy)).r;
-	velocity.y = texture(uVelocityY, gridSpaceToUV(samplePosition, velocityStagger.yxy)).r;
-	velocity.z = texture(uVelocityZ, gridSpaceToUV(samplePosition, velocityStagger.yyx)).r;
-
-	vec3 lastPosition = samplePosition - velocity * udt;
-	vec3 uv = gridSpaceToUV(lastPosition, fieldStagger);
-	float newValue = texture(uFieldIn, uv).r;
 	imageStore(uFieldOut, outputTexel, vec4(boundaryTexel ? uBoundaryCondition * newValue : newValue));
 }
