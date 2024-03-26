@@ -1,6 +1,6 @@
 #version 450
 
-uniform float uHalfOneOverDx;
+uniform float uOneOverDx;
 
 layout(binding = 0, r32f) uniform restrict image3D uVelocityX;
 layout(binding = 1, r32f) uniform restrict image3D uVelocityY;
@@ -23,7 +23,7 @@ void compute(ivec3 texel, ivec3 outputTexel, bool boundaryTexel)
 		 pfront = pright,
 		  pback = imageLoad(uPressure, texel + ivec3( 0,  0, -1)).r;
 
-	vec3 pressureGradientComponents = uHalfOneOverDx * vec3(pright - pleft, pup - pdown, pfront - pback);
+	vec3 pressureGradientComponents = uOneOverDx * vec3(pright - pleft, pup - pdown, pfront - pback);
 	
 	float oldx = imageLoad(uVelocityX, texel).r;
 	float oldy = imageLoad(uVelocityY, texel).r;

@@ -19,18 +19,22 @@ struct BufferedField
 		fields{ { name + " 1" } , { name + " 2"} },
 		writingBackBuffer(true)
 	{
+		using namespace Empty::gl;
+
 		for (int i : { 0, 1 })
 		{
 			fields[i].setStorage(1, size.x, size.y, size.z);
 			fields[i].template clearLevel<Format, DataType::Float>(0);
-			fields[i].setParameter<TextureParam::WrapS>(TextureParamValue::ClampToEdge);
-			fields[i].setParameter<TextureParam::WrapT>(TextureParamValue::ClampToEdge);
-			fields[i].setParameter<TextureParam::WrapR>(TextureParamValue::ClampToEdge);
+			fields[i].setParameter<TextureParam::WrapS>(TextureParamValue::ClampToBorder);
+			fields[i].setParameter<TextureParam::WrapT>(TextureParamValue::ClampToBorder);
+			fields[i].setParameter<TextureParam::WrapR>(TextureParamValue::ClampToBorder);
 		}
 	}
 
 	void clear()
 	{
+		using namespace Empty::gl;
+
 		fields[0].template clearLevel<Format, DataType::Float>(0);
 		fields[1].template clearLevel<Format, DataType::Float>(0);
 		writingBackBuffer = true;

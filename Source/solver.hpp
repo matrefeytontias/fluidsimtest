@@ -11,6 +11,11 @@
 #include "fields.hpp"
 #include "fluid.hpp"
 
+// ****************************************
+// Steps comprising a fluid simulation step
+// ****************************************
+
+
 enum struct FluidSimHookStage : int
 {
 	Start,
@@ -34,11 +39,13 @@ struct FluidSim
 	bool modifyHookStage(FluidSimHookId, FluidSimHookStage newWhen);
 	void unregisterHook(FluidSimHookId);
 
-	void applyForces(FluidState& fluidState, FluidSimImpulse& impulse, bool velocityOnly, float dt);
+	void applyForces(FluidState& fluidState, FluidSimMouseClickImpulse& impulse, bool velocityOnly, float dt);
+	void scrollGrid(FluidState& fluidState, Empty::math::ivec3 scroll);
 	void advance(FluidState& fluidState, float dt);
 
 	int diffusionJacobiSteps;
 	int pressureJacobiSteps;
+	bool reuseLastPressure;
 
 	bool runAdvection;
 	bool runDiffusion;
@@ -55,6 +62,7 @@ private:
 
 	Empty::gl::Buffer _entryPointIndirectDispatchBuffer;
 
+	struct GridScrollStep;
 	struct AdvectionStep;
 	struct DiffusionStep;
 	struct ForcesStep;
@@ -62,6 +70,7 @@ private:
 	struct PressureStep;
 	struct ProjectionStep;
 
+	std::unique_ptr<GridScrollStep> _gridScrollStep;
 	std::unique_ptr<AdvectionStep> _advectionStep;
 	std::unique_ptr<DiffusionStep> _diffusionStep;
 	std::unique_ptr<ForcesStep> _forcesStep;

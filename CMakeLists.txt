@@ -10,6 +10,8 @@ project(FluidSim DESCRIPTION "Fluid simulation playground" LANGUAGES C CXX)
 
 set(SOURCES
     Source/main.cpp
+    Source/gui.cpp
+    Source/gui.h
     Source/Context.h
     Source/Camera.h
     Source/fields.hpp
@@ -33,6 +35,7 @@ set(RESOURCES
     shaders/sim/advection.glsl
     shaders/sim/divergence.glsl
     shaders/sim/forces.glsl
+    shaders/sim/grid_scroll.glsl
     shaders/sim/jacobi.glsl
     shaders/sim/projection.glsl
     # Drawing shaders
