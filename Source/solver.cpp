@@ -429,10 +429,9 @@ struct FluidSim::PressureStep
 
 struct FluidSim::ProjectionStep
 {
-	ProjectionStep(Shader& entryPointShader)
+	ProjectionStep()
 		: projectionProgram("Projection program")
 	{
-		projectionProgram.attachShader(entryPointShader);
 		projectionProgram.attachFile(ShaderType::Compute, "shaders/sim/projection.glsl", "Projection shader");
 		projectionProgram.build();
 	}
@@ -453,7 +452,6 @@ struct FluidSim::ProjectionStep
 		projectionProgram.registerTexture("uVelocityY", velocityYTex, false);
 		projectionProgram.registerTexture("uVelocityZ", velocityZTex, false);
 		projectionProgram.registerTexture("uPressure", pressureTex, false);
-		projectionProgram.uniform("uFieldStagger", anyStagger);
 		context.bind(velocityXTex.getLevel(0), allVelocityXBinding, AccessPolicy::ReadWrite, GPUScalarField::Format);
 		context.bind(velocityYTex.getLevel(0), allVelocityYBinding, AccessPolicy::ReadWrite, GPUScalarField::Format);
 		context.bind(velocityZTex.getLevel(0), allVelocityZBinding, AccessPolicy::ReadWrite, GPUScalarField::Format);
@@ -503,7 +501,7 @@ FluidSim::FluidSim(Empty::math::uvec3 gridSize)
 	_forcesStep = std::make_unique<ForcesStep>(_entryPointShader);
 	_divergenceStep = std::make_unique<DivergenceStep>();
 	_pressureStep = std::make_unique<PressureStep>(gridSize);
-	_projectionStep = std::make_unique<ProjectionStep>(_entryPointShader);
+	_projectionStep = std::make_unique<ProjectionStep>();
 }
 
 FluidSim::~FluidSim() = default;
