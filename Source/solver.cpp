@@ -475,7 +475,7 @@ struct FluidSim::ProjectionStep
 FluidSim::FluidSim(Empty::math::uvec3 gridSize)
 	: diffusionJacobiSteps(100)
 	, pressureJacobiSteps(100)
-	, reuseLastPressure(false)
+	, reuseLastPressure(true)
 	, runAdvection(true)
 	, runDiffusion(true)
 	, runDivergence(true)
