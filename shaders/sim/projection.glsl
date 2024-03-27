@@ -2,10 +2,10 @@
 
 uniform float uOneOverDx;
 
-layout(binding = 0, r32f) uniform restrict image3D uVelocityX;
-layout(binding = 1, r32f) uniform restrict image3D uVelocityY;
-layout(binding = 2, r32f) uniform restrict image3D uVelocityZ;
-layout(binding = 3, r32f) uniform restrict readonly image3D uPressure;
+layout(binding = 0, r32f) uniform restrict image2DArray uVelocityX;
+layout(binding = 1, r32f) uniform restrict image2DArray uVelocityY;
+layout(binding = 2, r32f) uniform restrict image2DArray uVelocityZ;
+layout(binding = 3, r32f) uniform restrict readonly image2DArray uPressure;
 
 // Velocity textures are staggered, and the pressure texture is centered.
 // This means that pressure samples are in the middle of velocity samples,

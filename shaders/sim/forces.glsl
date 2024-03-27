@@ -7,7 +7,7 @@ uniform float uForceMagnitude;
 uniform float uBoundaryCondition;
 uniform bvec3 uFieldStagger;
 
-layout(binding = 0, r32f) uniform restrict image3D uField;
+layout(binding = 0, r32f) uniform restrict image2DArray uField;
 
 void compute(ivec3 texel, ivec3 outputTexel, bool boundaryTexel)
 {

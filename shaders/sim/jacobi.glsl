@@ -4,9 +4,9 @@ uniform float uAlpha;
 uniform float uOneOverBeta;
 uniform float uBoundaryCondition;
 
-layout(binding = 0, r32f) uniform readonly image3D uFieldSource;
-layout(binding = 1, r32f) uniform readonly image3D uFieldIn;
-layout(binding = 2, r32f) uniform writeonly restrict image3D uFieldOut;
+layout(binding = 0, r32f) uniform readonly image2DArray uFieldSource;
+layout(binding = 1, r32f) uniform readonly image2DArray uFieldIn;
+layout(binding = 2, r32f) uniform writeonly restrict image2DArray uFieldOut;
 
 // Performs one Jacobi iteration to solve a Poisson equation
 // Lx = b

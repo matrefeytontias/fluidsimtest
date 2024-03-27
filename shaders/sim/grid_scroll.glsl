@@ -2,8 +2,8 @@
 
 uniform ivec3 uTexelScroll;
 
-layout(r32f) uniform readonly restrict image3D uFieldIn;
-layout(r32f) uniform writeonly restrict image3D uFieldOut;
+layout(r32f) uniform readonly restrict image2DArray uFieldIn;
+layout(r32f) uniform writeonly restrict image2DArray uFieldOut;
 
 layout(local_size_x = 8, local_size_y = 8, local_size_z = 8) in;
 void main()

@@ -3,7 +3,7 @@
 #define RAY_SAMPLES 128
 
 uniform mat4 uCameraToFluidSim;
-uniform sampler3D uInkDensity;
+uniform sampler2DArray uInkDensity;
 uniform vec3 uInkColor;
 uniform float uInkMultiplier;
 
@@ -12,7 +12,15 @@ out vec4 fFragColor;
 
 float sampleFluid(vec3 p)
 {
-    return texture(uInkDensity, p * 0.5 + 0.5).r;
+    vec3 uv = p * 0.5 + 0.5;
+    
+    vec3 size = textureSize(uInkDensity, 0);
+	uv.z *= size.z;
+
+	float down = texture(uInkDensity, uv + vec3(0, 0, -0.5)).r;
+	float up = texture(uInkDensity, uv + vec3(0, 0, 0.5)).r;
+
+	return mix(down, up, fract(uv.z));
 }
 
 // All calculations take place in fluid sim space, ie the

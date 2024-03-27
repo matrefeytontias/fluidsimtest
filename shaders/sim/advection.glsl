@@ -12,11 +12,11 @@ uniform float udt;
 uniform float uBoundaryCondition;
 uniform bvec3 uFieldStagger;
 
-layout(binding = 0) uniform sampler3D uVelocityX;
-layout(binding = 1) uniform sampler3D uVelocityY;
-layout(binding = 2) uniform sampler3D uVelocityZ;
-layout(binding = 3) uniform sampler3D uFieldIn;
-layout(binding = 4, r32f) uniform restrict writeonly image3D uFieldOut;
+layout(binding = 0) uniform sampler2DArray uVelocityX;
+layout(binding = 1) uniform sampler2DArray uVelocityY;
+layout(binding = 2) uniform sampler2DArray uVelocityZ;
+layout(binding = 3) uniform sampler2DArray uFieldIn;
+layout(binding = 4, r32f) uniform restrict writeonly image2DArray uFieldOut;
 
 // Velocity X is staggered by velocityStagger.xyy
 // Velocity Y is staggered by velocityStagger.yxy
@@ -33,12 +33,23 @@ vec3 gridSpaceToUV(vec3 p, vec3 stagger)
 	return (p * uGridParams.oneOverDx + stagger) * uGridParams.oneOverGridSize;
 }
 
+float sampleTex(sampler2DArray tex, vec3 uv)
+{
+	ivec3 size = textureSize(tex, 0);
+	uv.z = uv.z * size.z - 0.5;
+
+	float down = texture(tex, uv + vec3(0, 0, -0.5)).r;
+	float up = texture(tex, uv + vec3(0, 0, 0.5)).r;
+
+	return mix(down, up, fract(uv.z));
+}
+
 vec3 bilerpVelocity(vec3 position)
 {
 	vec3 velocity;
-	velocity.x = texture(uVelocityX, gridSpaceToUV(position, velocityStagger.xyy)).r;
-	velocity.y = texture(uVelocityY, gridSpaceToUV(position, velocityStagger.yxy)).r;
-	velocity.z = texture(uVelocityZ, gridSpaceToUV(position, velocityStagger.yyx)).r;
+	velocity.x = sampleTex(uVelocityX, gridSpaceToUV(position, velocityStagger.xyy));
+	velocity.y = sampleTex(uVelocityY, gridSpaceToUV(position, velocityStagger.yxy));
+	velocity.z = sampleTex(uVelocityZ, gridSpaceToUV(position, velocityStagger.yyx));
 	return velocity;
 }
 
@@ -49,7 +60,7 @@ vec3 traceBack(vec3 position)
 
 float interpolateField(vec3 uv)
 {
-	return texture(uFieldIn, uv).r;
+	return sampleTex(uFieldIn, uv);
 }
 
 void compute(ivec3 texel, ivec3 outputTexel, bool boundaryTexel)

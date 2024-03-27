@@ -58,7 +58,7 @@ FluidSimRenderer::FluidSimRenderer(int frameWidth, int frameHeight)
 	, _vs()
 {
 	_fluidProgram.attachFile(ShaderType::Vertex, "shaders/draw/fluid_vertex.glsl", "Fluid render vertex shader");
-	_fluidProgram.attachFile(ShaderType::Fragment, "shaders/draw/fluid_fragment.glsl", "Fluid render vertex shader");
+	_fluidProgram.attachFile(ShaderType::Fragment, "shaders/draw/fluid_fragment.glsl", "Fluid render fragment shader");
 	_fluidProgram.build();
 
 	_gridProgram.attachFile(ShaderType::Vertex, "shaders/draw/grid_vertex.glsl", "Sim grid render vertex shader");
@@ -113,7 +113,7 @@ void FluidSimRenderer::renderFluidSim(FluidState& fluidState, const FluidSimRend
 	}
 
 	// Draw highlighted slice
-	if (highlightSlice >= 0 && highlightSlice < params.gridSizeInCells.z)
+	if (highlightSlice >= 0 && highlightSlice < (int)params.gridSizeInCells.z)
 	{
 		vec3 s{ params.gridSizeInCells };
 		s.z = 1.f;
