@@ -15,7 +15,7 @@ float sampleFluid(vec3 p)
     vec3 uv = p * 0.5 + 0.5;
     
     vec3 size = textureSize(uInkDensity, 0);
-	uv.z *= size.z;
+	uv.z = uv.z * size.z - 0.5;
 
 	float down = texture(uInkDensity, uv + vec3(0, 0, -0.5)).r;
 	float up = texture(uInkDensity, uv + vec3(0, 0, 0.5)).r;
