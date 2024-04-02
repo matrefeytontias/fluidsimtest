@@ -173,7 +173,8 @@ int main(int argc, char* argv[])
 			glfwGetKey(context.window, GLFW_KEY_A) == GLFW_PRESS,
 			glfwGetKey(context.window, GLFW_KEY_D) == GLFW_PRESS,
 			mouseNow.x - mouseThen.x,
-			mouseNow.y - mouseThen.y
+			mouseNow.y - mouseThen.y,
+			dt
 			);
 
 		then = now;

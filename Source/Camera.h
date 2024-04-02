@@ -9,7 +9,7 @@ constexpr float piOver2 = 1.570796326794f;
 
 struct Camera
 {
-	float movementSpeed = .01f, angularSpeed = 0.002f;
+	float movementSpeed = 1.f, angularSpeed = 0.002f;
 	Empty::math::mat4 m;
 	Empty::math::mat4 p;
 
@@ -23,7 +23,7 @@ struct Camera
 
 	void translate(const Empty::math::vec3& v) { m.column(3).xyz() += (m * Empty::math::vec4(v, 0)).xyz(); }
 
-	void processInput(bool forward, bool back, bool up, bool down, bool left, bool right, float mouseDX, float mouseDY)
+	void processInput(bool forward, bool back, bool up, bool down, bool left, bool right, float mouseDX, float mouseDY, float dt)
 	{
 		if (!freeze)
 		{
@@ -37,6 +37,8 @@ struct Camera
 			dir.x = Empty::utils::select(movementSpeed, right) - Empty::utils::select(movementSpeed, left);
 			dir.y = Empty::utils::select(movementSpeed, up) - Empty::utils::select(movementSpeed, down);
 			dir.z = Empty::utils::select(movementSpeed, back) - Empty::utils::select(movementSpeed, forward);
+
+			dir *= dt;
 
 			translate(dir);
 
