@@ -11,13 +11,13 @@ out vec4 fFragColor;
 
 vec4 colors[4] = { vec4(0., 0., 0., 1.), vec4(1., 1., 1., 1.), vec4(0., 1., 0., 1.), vec4(1., 0., 0., 1.) };
 
-vec4 sampleTex(sampler2DArray tex, vec3 uv)
+float sampleTex(sampler2DArray tex, vec3 uv)
 {
 	vec3 size = textureSize(tex, 0);
 	uv.z = uv.z * size.z - 0.5;
 
-	vec4 down = texture(tex, uv + vec3(0, 0, -0.5));
-	vec4 up = texture(tex, uv + vec3(0, 0, 0.5));
+	float down = texture(tex, uv + vec3(0, 0, -0.5)).r;
+	float up = texture(tex, uv + vec3(0, 0, 0.5)).r;
 
 	return mix(down, up, fract(uv.z));
 }
@@ -31,7 +31,7 @@ void main()
 	}
 	else
 	{
-		vec4 color = sampleTex(uTexture, vUV) * uColorScale;
-		fFragColor = abs(color);
+		float color = sampleTex(uTexture, vUV) * uColorScale;
+		fFragColor = vec4(max(0, color), max(0, -color), 0, 1);
 	}
 }
