@@ -5,7 +5,7 @@ layout(local_size_x = 8, local_size_y = 8, local_size_z = 8) in;
 uniform bvec3 uFieldStagger;
 
 // Unify computations and boundary condition enforcement
-void compute(ivec3 inputTexel, ivec3 outputTexel, bool boundaryTexel);
+void compute(ivec3 inputTexel, ivec3 outputTexel, bool boundaryTexel, bool unused);
 
 void main()
 {
@@ -18,10 +18,12 @@ void main()
 	// Staggered fields' bottom, left and back boundary is at
 	// x,y,z == 1 rather than 0 to match the physical location of
 	// the boundary on centered fields.
-	bvec3 bBottomLeftBack = lessThanEqual(texel, ivec3(any(uFieldStagger))),
+	/*bvec3 bBottomLeftBack = lessThanEqual(texel, ivec3(any(uFieldStagger))),
 		bTopRightFront = equal(texel, size - 1);
 	bool isBoundaryTexel = any(bBottomLeftBack) || any(bTopRightFront);
 	ivec3 boundaryOffset = ivec3(bBottomLeftBack) - ivec3(bTopRightFront);
+	bool unused = any(lessThan(texel, ivec3(uFieldStagger)));*/
 
-	compute(texel + boundaryOffset, texel, isBoundaryTexel);
+	// TEST: collocated grid
+	compute(texel, texel, false, false);
 }

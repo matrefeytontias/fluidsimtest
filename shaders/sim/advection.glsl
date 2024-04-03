@@ -21,7 +21,8 @@ layout(binding = 4) uniform restrict writeonly image2DArray uFieldOut;
 // Velocity X is staggered by velocityStagger.xyy
 // Velocity Y is staggered by velocityStagger.yxy
 // Velocity Z is staggered by velocityStagger.yyx
-const vec2 velocityStagger = vec2(0.5, 0);
+// TEST: collocated grid
+const vec2 velocityStagger = vec2(0, 0);
 
 vec3 texelSpaceToGridSpace(ivec3 p, vec3 stagger)
 {
@@ -41,7 +42,7 @@ float sampleTex(sampler2DArray tex, vec3 uv)
 	float down = texture(tex, uv + vec3(0, 0, -0.5)).r;
 	float up = texture(tex, uv + vec3(0, 0, 0.5)).r;
 
-	return mix(down, up, fract(uv.z));
+	return mix(uv.z < 0. ? 0 : down, uv.z >= size.z - 1. ? 0 : up, fract(uv.z));
 }
 
 vec3 bilerpVelocity(vec3 position)
@@ -104,10 +105,13 @@ float interpolateField(vec3 uv)
 	vec3 t = realTexelSample - cornerTexelSample;
 
 	// Interpolate along X then Y then Z
-	vec4 zValues;
+	vec4 zValues = vec4(0);
 	gatherUV.z -= 2.;
-	for (int i = 0; i < 4; i++)
+	for (int i = 0; i < 4; i++, gatherUV.z += 1.)
 	{
+		if (gatherUV.z < 0 || gatherUV.z >= size.z)
+			continue;
+
 		vec4 topLeftBlock = textureGatherOffset(uFieldIn, gatherUV, ivec2(-1, 1));
 		vec4 topRightBlock = textureGatherOffset(uFieldIn, gatherUV, ivec2(1, 1));
 		vec4 bottomLeftBlock = textureGatherOffset(uFieldIn, gatherUV, ivec2(-1, -1));
@@ -120,17 +124,17 @@ float interpolateField(vec3 uv)
 		float q3 = monotonicCubicInterpolation(topLeftBlock.x, topLeftBlock.y, topRightBlock.x, topRightBlock.y, t.x);
 
 		zValues[i] = monotonicCubicInterpolation(q0, q1, q2, q3, t.y);
-		gatherUV.z += 1.;
 	}
 
 	return monotonicCubicInterpolation(zValues[0], zValues[1], zValues[2], zValues[3], t.z);
 }
 
-void compute(ivec3 texel, ivec3 outputTexel, bool boundaryTexel)
+void compute(ivec3 texel, ivec3 outputTexel, bool boundaryTexel, bool unused)
 {
 	vec3 fieldStagger = ivec3(uFieldStagger) * 0.5;
 	vec3 samplePosition = texelSpaceToGridSpace(texel, fieldStagger);
 	float newValue = interpolateField(gridSpaceToUV(traceBack(samplePosition), fieldStagger));
 
-	imageStore(uFieldOut, outputTexel, vec4(boundaryTexel ? uBoundaryCondition * newValue : newValue));
+	// TEST: collocated grid
+	imageStore(uFieldOut, outputTexel, vec4(/*unused ? 0 : boundaryTexel ? uBoundaryCondition * newValue :*/ newValue));
 }

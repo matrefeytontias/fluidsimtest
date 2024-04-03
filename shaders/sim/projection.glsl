@@ -19,19 +19,23 @@ layout(binding = 3, r32f) uniform restrict readonly image2DArray uPressure;
 void main()
 {
 	ivec3 texel = ivec3(gl_GlobalInvocationID);
-	ivec3 size = imageSize(uVelocityX) - 1;
+	ivec3 size = imageSize(uPressure) - 1;
+	ivec2 s = ivec2(1, 0);
+	ivec3 zero = ivec3(0);
 
 	// Velocity X, Y and Z texels are in different locations, so they each need a
 	// coordinate from different gradients, which happen to share a texel.
+	// Clamp coordinates so gradients are 0 on the boundary
+	// TEST: collocated grid
+	float pleft = imageLoad(uPressure, max(zero, texel - s.xyy)).r,
+		 pright = imageLoad(uPressure, min(size, texel + s.xyy)).r,
+		    pup = imageLoad(uPressure, min(size, texel + s.yxy)).r,
+		  pdown = imageLoad(uPressure, max(zero, texel - s.yxy)).r,
+		 pfront = imageLoad(uPressure, min(size, texel + s.yyx)).r,
+		  pback = imageLoad(uPressure, max(zero, texel - s.yyx)).r;
 
-	float pleft = imageLoad(uPressure, texel + ivec3(-1,  0,  0)).r,
-		 pright = imageLoad(uPressure, texel                    ).r,
-		    pup = pright,
-		  pdown = imageLoad(uPressure, texel + ivec3( 0, -1,  0)).r,
-		 pfront = pright,
-		  pback = imageLoad(uPressure, texel + ivec3( 0,  0, -1)).r;
-
-	vec3 pressureGradientComponents = uOneOverDx * vec3(pright - pleft, pup - pdown, pfront - pback);
+	// TEST: collocated grid
+	vec3 pressureGradientComponents = uOneOverDx * vec3(pright - pleft, pup - pdown, pfront - pback) * 0.5;
 	
 	float oldx = imageLoad(uVelocityX, texel).r;
 	float oldy = imageLoad(uVelocityY, texel).r;
@@ -40,13 +44,8 @@ void main()
 	float newy = oldy - pressureGradientComponents.y;
 	float newz = oldz - pressureGradientComponents.z;
 
-	// Boundary detection for each velocity field
-	bvec3 boundaryVelX = lessThanEqual(texel, ivec3(1, 0, 0)) || equal(texel, size);
-	bvec3 boundaryVelY = lessThanEqual(texel, ivec3(0, 1, 0)) || equal(texel, size);
-	bvec3 boundaryVelZ = lessThanEqual(texel, ivec3(0, 0, 1)) || equal(texel, size);
-
-	// Velocity respects the staggered no-slip boundary condition
-	imageStore(uVelocityX, texel, vec4(any(boundaryVelX) ? 0. : newx));
-	imageStore(uVelocityY, texel, vec4(any(boundaryVelY) ? 0. : newy));
-	imageStore(uVelocityZ, texel, vec4(any(boundaryVelZ) ? 0. : newz));
+	// TEST: collocated grid
+	imageStore(uVelocityX, texel, vec4(/*texel.x == 0 ? 0 : */newx));
+	imageStore(uVelocityY, texel, vec4(/*texel.y == 0 ? 0 : */newy));
+	imageStore(uVelocityZ, texel, vec4(/*texel.z == 0 ? 0 : */newz));
 }

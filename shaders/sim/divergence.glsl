@@ -16,14 +16,20 @@ layout(binding = 3, r32f) uniform restrict writeonly image2DArray uDivergence;
 void main()
 {
 	ivec3 texel = ivec3(gl_GlobalInvocationID);
+	ivec3 size = imageSize(uVelocityX) - 1;
+	ivec2 s = ivec2(1, 0);
+	ivec3 zero = ivec3(0);
 
-	float xleft = imageLoad(uVelocityX, texel                 ).r,
-		 xright = imageLoad(uVelocityX, texel + ivec3(1, 0, 0)).r,
-		    yup = imageLoad(uVelocityY, texel + ivec3(0, 1, 0)).r,
-		  ydown = imageLoad(uVelocityY, texel                 ).r,
-		 zfront = imageLoad(uVelocityZ, texel + ivec3(0, 0, 1)).r,
-		  zback = imageLoad(uVelocityZ, texel                 ).r;
+	// Clamp coordinates so gradients are 0 on the boundary
+	// TEST: collocated grid
+	float xleft = imageLoad(uVelocityX, max(zero, texel - s.xyy)).r,
+		 xright = imageLoad(uVelocityX, min(size, texel + s.xyy)).r,
+		    yup = imageLoad(uVelocityY, min(size, texel + s.yxy)).r,
+		  ydown = imageLoad(uVelocityY, max(zero, texel - s.yxy)).r,
+		 zfront = imageLoad(uVelocityZ, min(size, texel + s.yyx)).r,
+		  zback = imageLoad(uVelocityZ, max(zero, texel - s.yyx)).r;
 
-	float divergence = (xright - xleft + yup - ydown + zfront - zback) * uOneOverDx;
+	// TEST: collocated grid
+	float divergence = (xright - xleft + yup - ydown + zfront - zback) * uOneOverDx * 0.5;
 	imageStore(uDivergence, texel, vec4(divergence));
 }

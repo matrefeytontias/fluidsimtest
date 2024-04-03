@@ -32,10 +32,10 @@ constexpr int divergenceOutBinding = 3;
 
 constexpr int projectionPressureBinding = 3;
 
-const Empty::math::bvec3 anyStagger(true, true, true);
-const Empty::math::bvec3 xStagger(true, false, false);
-const Empty::math::bvec3 yStagger(false, true, false);
-const Empty::math::bvec3 zStagger(false, false, true);
+// TEST: collocated grid
+const Empty::math::bvec3 xStagger(false, false, false);
+const Empty::math::bvec3 yStagger(false, false, false);
+const Empty::math::bvec3 zStagger(false, false, false);
 const Empty::math::bvec3 noStagger(false, false, false);
 
 // f(boundary) + f(neighbour) = 0 -> f(boundary) = -f(neighbour)
@@ -147,7 +147,7 @@ struct FluidSim::AdvectionStep
 				advectionProgram.registerTexture("uFieldOut", fieldOut, false);
 				context.bind(fieldOut.getLevel(0), advectionFieldOutBinding, AccessPolicy::WriteOnly, GPUScalarField::Format);
 
-				advectionProgram.uniform("uBoundaryCondition", boundaryCondition);
+				// advectionProgram.uniform("uBoundaryCondition", boundaryCondition);
 				advectionProgram.uniform("uFieldStagger", stagger);
 
 				context.dispatchComputeIndirect();
@@ -275,7 +275,7 @@ struct FluidSim::DiffusionStep
 			float oneOverBeta = 1.f / (alpha + 6.f);
 			jacobiProgram.uniform("uAlpha", alpha);
 			jacobiProgram.uniform("uOneOverBeta", oneOverBeta);
-			jacobiProgram.uniform("uBoundaryCondition", staggeredNoSlipBoundaryCondition);
+			// jacobiProgram.uniform("uBoundaryCondition", staggeredNoSlipBoundaryCondition);
 		}
 
 		context.setShaderProgram(jacobiProgram);
@@ -284,11 +284,11 @@ struct FluidSim::DiffusionStep
 		{
 			if (i > 0)
 				context.memoryBarrier(MemoryBarrierType::ShaderImageAccess);
-			jacobiProgram.uniform("uFieldStagger", xStagger);
+			// jacobiProgram.uniform("uFieldStagger", xStagger);
 			jacobiX.step(jacobiProgram);
-			jacobiProgram.uniform("uFieldStagger", yStagger);
+			// jacobiProgram.uniform("uFieldStagger", yStagger);
 			jacobiY.step(jacobiProgram);
-			jacobiProgram.uniform("uFieldStagger", zStagger);
+			// jacobiProgram.uniform("uFieldStagger", zStagger);
 			jacobiZ.step(jacobiProgram);
 		}
 
@@ -331,7 +331,7 @@ struct FluidSim::ForcesStep
 				context.bind(field.getLevel(0), forcesFieldBinding, AccessPolicy::ReadWrite, GPUScalarField::Format);
 
 				forcesProgram.uniform("uForceMagnitude", forceMagnitude);
-				forcesProgram.uniform("uBoundaryCondition", boundaryCondition);
+				// forcesProgram.uniform("uBoundaryCondition", boundaryCondition);
 				forcesProgram.uniform("uFieldStagger", stagger);
 				context.dispatchComputeIndirect();
 			};
@@ -406,8 +406,8 @@ struct FluidSim::PressureStep
 			float oneOverBeta = 1.f / 6.f;
 			jacobiProgram.uniform("uAlpha", alpha);
 			jacobiProgram.uniform("uOneOverBeta", oneOverBeta);
-			jacobiProgram.uniform("uBoundaryCondition", neumannBoundaryCondition);
-			jacobiProgram.uniform("uFieldStagger", noStagger);
+			// jacobiProgram.uniform("uBoundaryCondition", neumannBoundaryCondition);
+			// jacobiProgram.uniform("uFieldStagger", noStagger);
 		}
 
 		context.setShaderProgram(jacobiProgram);

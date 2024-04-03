@@ -15,7 +15,7 @@ layout(binding = 2, r32f) uniform writeonly restrict image2DArray uFieldOut;
 // For a full derivation, see supplementary material for
 // Rabbani, Guertin et al., 2022. Compact Poisson Filters for Fast Fluid Simulation.
 // https://dl.acm.org/action/downloadSupplement?doi=10.1145%2F3528233.3530737&file=supplementary.pdf
-void compute(ivec3 texel, ivec3 outputTexel, bool boundaryTexel)
+void compute(ivec3 texel, ivec3 outputTexel, bool boundaryTexel, bool unused)
 {
 	// Field is 0 outside of the texture
 	float left = imageLoad(uFieldIn, texel + ivec3(-1,  0,  0)).r,
@@ -28,5 +28,6 @@ void compute(ivec3 texel, ivec3 outputTexel, bool boundaryTexel)
 	
 	float value = (left + right + up + down + front + back + uAlpha * source) * uOneOverBeta;
 
-	imageStore(uFieldOut, outputTexel, vec4(boundaryTexel ? uBoundaryCondition * value : value));
+	// TEST: collocated grid
+	imageStore(uFieldOut, outputTexel, vec4(/*unused ? 0 : boundaryTexel ? uBoundaryCondition * value :*/ value));
 }
